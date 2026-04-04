@@ -1,6 +1,10 @@
 [package]
-name = "x1zz-lang"
+name = "x1zz"
 version = "0.1.0"
 edition = "2024"
+description = "High-performance pipeline-based data analysis language"
+license = "Apache 2.0"
 
-[dependencies]
+[[bin]]
+name = "x1zz"
+path = "src/main.rs"

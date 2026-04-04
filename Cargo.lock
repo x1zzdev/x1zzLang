@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "x1zz-lang"
+name = "x1zz"
 version = "0.1.0"
