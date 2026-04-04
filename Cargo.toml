@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "High-performance pipeline-based data analysis language"
 license = "Apache 2.0"
+repository = "https://github.com/ax1sofficially-alt/x1zzLang"
 
 [[bin]]
 name = "x1zz"
