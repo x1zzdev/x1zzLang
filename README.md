@@ -205,4 +205,4 @@ x1zz run analysis.xzz
 
 ## 📜 License
 
-TBD
+Apache-2.0 license
