@@ -1,1 +1,7 @@
 /target
+
+# x1zzLang — Rule files (security: keep out of version control)
+.roorules
+.clinerules
+.roo/
+.clinerules
