@@ -1,15 +1,7 @@
 # x1zzLang
 
-> **데이터 분석을 위한 도구가 아니라, 데이터 분석 자체가 문법인 언어**
-
----
-
-## 🚀 Introduction
-
-x1zzLang은 고성능 데이터 분석을 위해 설계된 새로운 프로그래밍 언어다.
-
-파일 상단부터 바로 실행되는 스크립트 형태지만,
-내부적으로는 Rust + Polars로 컴파일되어 네이티브 수준의 성능을 낸다.
+**데이터 분석 자체가 문법인 언어.**
+겉은 스크립트, 속은 컴파일.
 
 ```xzz
 v data = load("sales.csv") :: SalesSchema;
@@ -17,137 +9,105 @@ v data = load("sales.csv") :: SalesSchema;
 data
   |> filter(col("price") > 100)
   |> groupBy("region")
-  |> mean("price")
-  |> plot.bar(x: "region", y: "price");
+  |> mean("price");
 ```
 
-import도, main()도 없다.
-데이터 분석 자체가 곧 코드다.
+`import`도, `main()`도 없다. 파일 상단부터 실행된다.
 
 ---
 
-## ⚡ Why x1zzLang
+## Why x1zzLang
 
-기존 데이터 분석 환경은 구조적으로 불편하다.
+기존 데이터 분석 환경의 문제는 언어가 아니라 도구들의 조합으로 해결하려는 구조 자체에 있다.
 
-* pandas / numpy / matplotlib 조합
-* 런타임에서 터지는 에러
-* 실행해보기 전까지 결과를 모름
+- 런타임에서 터지는 타입 에러
+- 실행 전까지 알 수 없는 결과
+- 라이브러리 의존성과 보일러플레이트
 
-x1zzLang은 이 문제를 **언어 설계 수준에서** 해결하려고 한다.
-
----
-
-## 🧠 Core Principles
-
-### 1. Data-First Grammar
-
-filter, groupBy, mean 같은 연산이
-라이브러리가 아니라 **언어 문법**이다.
+x1zzLang은 이 문제를 **언어 설계 수준에서** 해결한다.
+`filter`, `groupBy`, `mean`은 라이브러리 함수가 아니라 언어 문법이다.
 
 ---
 
-### 2. Compile-time Safety
+## Core Design
+
+### Safe-Load
 
 ```xzz
 v data = load("sales.csv") :: SalesSchema;
 ```
 
-스키마를 기반으로:
+스키마를 선언하면 컬럼 존재 여부와 타입 일치를 **컴파일 시점에 검증**한다.
+데이터를 불러오는 순간, 이미 검증된 상태다.
 
-* 컬럼 존재 여부
-* 타입 일치 여부
-
-를 **컴파일 시점에 검증**한다.
-
----
-
-### 3. Zero-cost Abstraction
-
-파이프라인 문법은 단순한 문법 설탕이 아니다.
-
-```text
-.xzz → Rust → Native Binary
-```
-
-모든 코드는 최적화된 Rust 코드로 변환된다.
-
----
-
-### 4. Pipeline as Default
+### Pipeline Operator
 
 ```xzz
-data |> filter(...) |> mean(...)
+data
+  |> filter(col("price") > 100)
+  |> sum("price")
 ```
 
-데이터 흐름이 코드 구조 그대로 드러난다.
+파이프라인은 문법 설탕이 아니다.
+내부적으로 Polars LazyFrame 연산 그래프로 변환되어 최적화된다.
+
+### Compile-time Type System
+
+`.xzz` 코드는 Rust로 트랜스파일되어 네이티브 바이너리로 실행된다.
+
+```
+.xzz → Rust (transpile) → Native Binary (Polars)
+```
 
 ---
 
-## 🔍 Additional Capability: State Prediction (Experimental)
+## Neural Query Planner (x1zz-Copilot)
 
-최근 추가된 기능 중 하나는
-**코드를 실행하기 전에 데이터 변화를 예측하는 것**이다.
+x1zzLang의 AI 레이어는 코드를 생성하는 어시스턴트가 아니다.
 
-예를 들어:
+**코드를 실행하기 전에 데이터의 상태 변화를 예측한다.**
 
 ```xzz
-data |> filter(col("price") > 100) |> mean("price")
+data |> filter(col("price") > 100) |> sum("price")
 ```
-
-이 코드를 실행하기 전에:
-
-* row 수가 줄어드는지
-* 평균이 올라가는지
-* 분포가 어떻게 바뀌는지
-
-를 추정한다.
 
 ```json
 {
-  "rows": "1000 -> 230",
-  "mean(price)": "12000 -> 45000"
+  "rows_before": 1000,
+  "rows_after":  230,
+  "sum(price)":  "~10,350,000 (est.)"
 }
 ```
 
-이 값은 실제 결과가 아니라
-**코드를 기반으로 한 예측**이다.
-
-> 정확한 값보다 “변화의 방향”을 보는 것이 목적이다.
+이 예측값은 실제 실행 결과가 아니라, 파이프라인 구조와 데이터 분포를 기반으로 한 **사전 추론**이다.
+GitHub Copilot이 코드를 완성하는 도구라면, x1zz-Copilot은 **실행 결과를 이해하는 컴파일러의 일부**다.
 
 ---
 
-## 🧩 How It Works (Simplified)
+## Status
 
-```text
-.xzz code
-   ↓
-Compiler (Rust)
-   ↓
-Execution (Polars)
-```
-
-State Prediction은 이 흐름 옆에서 동작하는 **보조 레이어**다.
-
-```text
-code → (AI) → predicted state
-     → (runtime) → actual result
-```
+| Component | Status |
+|---|---|
+| Lexer / Parser | 구현 진행 중 |
+| Pipeline Operator (`\|>`) | 설계 완료 |
+| Safe-Load (`::`) | 설계 완료 |
+| Polars 연동 | 구현 진행 중 |
+| State Prediction (PoC) | 준비 중 |
 
 ---
 
-## 🛠️ Key Features
+## Roadmap
 
-* DataFrame 연산이 언어 문법으로 내장
-* 스키마 기반 Safe-Load
-* 컴파일 타임 타입 검사
-* Rust + Polars 기반 실행
-* 파이프라인 중심 코드 구조
-* (실험적) 실행 전 결과 예측
+| Phase | Scope |
+|---|---|
+| Phase 1 — Language Core | Lexer, Parser, Type System, Pipeline, Safe-Load |
+| Phase 2 — Execution Layer | Rust transpile, Polars 완전 연동, 증분 컴파일 |
+| Phase 3 — Prediction Layer | Synthetic Data Engine, State Prediction 모델 학습 |
+| Phase 4 — Copilot OS | 자연어 → 파이프라인 변환, MCP 서버 |
 
 ---
 
-## 📦 Installation (Planned)
+## Installation
 
 ```bash
 git clone https://github.com/x1zz/x1zzLang
@@ -155,54 +115,12 @@ cd x1zzLang
 cargo build
 ```
 
----
-
-## ▶️ Usage
-
 ```bash
 x1zz run analysis.xzz
 ```
 
 ---
 
-## 🧱 Current Status
+## License
 
-초기 구현 단계.
-
-* 언어: 설계 + 일부 구현 진행 중
-* 컴파일러: 기본 구조 설계 완료
-* AI: State Prediction PoC 준비 중
-
----
-
-## 🧭 Roadmap
-
-### Phase 1 — Language Core
-
-* Parser / Type System / Pipeline
-
-### Phase 2 — Execution Layer
-
-* Rust + Polars 통합
-* Safe-Load 완성
-
-### Phase 3 — Prediction Layer
-
-* Synthetic Data Engine
-* State Prediction 모델
-
-### Phase 4 — Copilot
-
-* 자연어 → 파이프라인 변환
-
----
-
-## 🤝 Contributors
-
-* Seowoo Jang
-
----
-
-## 📜 License
-
-Apache-2.0 license
+Apache-2.0
