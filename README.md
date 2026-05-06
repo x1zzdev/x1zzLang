@@ -110,9 +110,7 @@ GitHub Copilot이 코드를 완성하는 도구라면, x1zz-Copilot은 **실행 
 ## Installation
 
 ```bash
-git clone https://github.com/x1zz/x1zzLang
-cd x1zzLang
-cargo build
+준비중
 ```
 
 ```bash
