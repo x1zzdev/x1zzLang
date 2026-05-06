@@ -113,9 +113,7 @@ GitHub Copilot이 코드를 완성하는 도구라면, x1zz-Copilot은 **실행 
 준비중
 ```
 
-```bash
-x1zz run analysis.xzz
-```
+
 
 ---
 
