@@ -4,12 +4,12 @@
 겉은 스크립트, 속은 컴파일.
 
 ```xzz
-v data = load("sales.csv") :: SalesSchema;
+v data = load("sales.csv") :: SalesSchema
 
 data
   |> filter(col("price") > 100)
   |> groupBy("region")
-  |> mean("price");
+  |> mean("price")
 ```
 
 `import`도, `main()`도 없다. 파일 상단부터 실행된다.
@@ -34,7 +34,7 @@ x1zzLang은 이 문제를 **언어 설계 수준에서** 해결한다.
 ### Safe-Load
 
 ```xzz
-v data = load("sales.csv") :: SalesSchema;
+v data = load("sales.csv") :: SalesSchema
 ```
 
 스키마를 선언하면 컬럼 존재 여부와 타입 일치를 **컴파일 시점에 검증**한다.
