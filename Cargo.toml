@@ -1,11 +1,15 @@
-[package]
+[workspace]
+
+members = [
+    "x1zz-compiler",
+    "x1zz-sde",
+]
+resolver = "2"
+
+[workspace.package]
 name = "x1zz"
 version = "0.1.0"
 edition = "2024"
-description = "High-performance pipeline-based data analysis language"
+authors = ["Jangseowoo <ax1s.x1zz.com>"]
 license = "Apache-2.0"
 repository = "https://github.com/ax1sofficially-alt/x1zzLang"
-
-[[bin]]
-name = "x1zz"
-path = "src/main.rs"
