@@ -304,7 +304,7 @@ blind_spots |> plot.bar(x: "region", y: "population");
 |-------|------|--------------|------|
 | **Phase 1** — Language Core | 언어 기반 완성 | Lexer, Parser, Type System, Pipeline Operator (`\|>`), Safe-Load (`::`) | 🔨 진행 중 |
 | **Phase 2** — Execution Layer | 완전한 실행 환경 | Rust Transpiler 완성, Polars 완전 연동, 증분 컴파일, CLI (`x1zz run/check/fmt`) | 📋 설계 완료 |
-| **Phase 3** — Prediction Layer | AI 예측 레이어 | SDE (Synthetic Data Engine), NQP 모델 학습, State Prediction PoC | 📋 준비 중 |
+| **Phase 3** — Prediction Layer | AI 예측 레이어 | SDE (Synthetic Data Engine), NQP 모델 학습, State Prediction PoC | 🔨 진행 중 |
 | **Phase 4** — Copilot OS | 자연어 인터페이스 | 자연어 → 파이프라인 변환, MCP 서버, x1zz-Copilot 통합, **Main 시연** | 🔭 비전 |
 
 > *2026년 현재 Phase 1 구현이 진행 중이다.*
