@@ -29,7 +29,7 @@ type WelfareSchema = {
   population: int,
   income:     Option<float>,   // nullable — 공공 데이터 특성상 결측 가능
   support:    bool,
-};
+}
 
 v data = load("welfare_2026.csv") :: WelfareSchema
 
@@ -86,7 +86,7 @@ v result = data
   |> groupBy("region")               // .group_by(["region"])
   |> mean("price")                   // .agg([col("price").mean()])
   |> orderBy("price", desc: true)    // .sort("price", descending: true)
-  |> take(10);                       // .limit(10)  ← collect()는 최종 실행 시점
+  |> take(10)                       // .limit(10)  ← collect()는 최종 실행 시점
 ```
 
 `.xzz` 코드는 Rust로 트랜스파일되어 네이티브 바이너리로 실행된다:
@@ -152,10 +152,10 @@ type SalesSchema = {
   region:   string,
   quantity: int,
   discount: Option<float>,   // nullable — 할인 없는 경우 존재
-};
+}
 
 // :: 연산자가 컬럼 존재 여부와 타입 일치를 컴파일 시점에 검증한다.
-v data = load("sales_2026.csv") :: SalesSchema;
+v data = load("sales_2026.csv") :: SalesSchema
 ```
 
 컬럼명 오타나 타입 불일치는 **실행 전에** 잡힌다:
@@ -241,7 +241,7 @@ type WelfareSchema = {
   population: int,
   income:     Option<float>,
   support:    bool,
-};
+}
 
 v data = load("welfare_2026.csv") :: WelfareSchema
 
@@ -254,7 +254,7 @@ v blind_spots = data
   |> orderBy("population", desc: true)
   |> take(10)
 
-blind_spots |> plot.bar(x: "region", y: "population");
+blind_spots |> plot.bar(x: "region", y: "population")
 ```
 
 | 지표 | Python (pandas) | x1zzLang |
