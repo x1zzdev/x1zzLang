@@ -243,7 +243,7 @@ type WelfareSchema = {
   support:    bool,
 };
 
-v data = load("welfare_2026.csv") :: WelfareSchema;
+v data = load("welfare_2026.csv") :: WelfareSchema
 
 v blind_spots = data
   |> dropNull("income")
@@ -252,7 +252,7 @@ v blind_spots = data
   |> groupBy("region")
   |> count("population")
   |> orderBy("population", desc: true)
-  |> take(10);
+  |> take(10)
 
 blind_spots |> plot.bar(x: "region", y: "population");
 ```
@@ -354,7 +354,7 @@ x1zz emit   rust src/pipeline/analysis.xzz       # Rust 코드 출력
 ## Contributing
 
 x1zzLang은 오픈소스다.  
-언어 설계, Rust 구현, NQP 모델 학습, 공공 데이터 파이프라인 작성 — 모든 기여를 환영한다.
+언어 설계, Rust 구현, NQP 모델 학습, 공공 데이터 파이프라인 작성 — 모든 기여를 환영합니다
 
 이슈와 PR은 GitHub에서.
 
@@ -362,13 +362,13 @@ x1zzLang은 오픈소스다.
 
 ## License
 
-Apache-2.0 — 자유롭게 사용하고, 자유롭게 기여하라.
+Apache-2.0 — 자유롭게 사용하고, 자유롭게 기여하세요
 
 ---
 
 <div align="center">
 
-*"데이터는 이미 거기 있다. 분석할 수 있는 언어가 없었을 뿐이다."*
+
 
 **x1zzLang — 2026**
 
