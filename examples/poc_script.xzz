@@ -1,4 +1,4 @@
-// ── 1. 스키마 정의 (Safe-Load 강제 — Rule B-1) ────────────────────────────
+
 type AirQuality = {
   station: string,
   date: string,
@@ -7,9 +7,8 @@ type AirQuality = {
   o3: Option<float>,
 };
 
-// ── 2. 분석 파이프라인 (Pipeline-First — Rule B-2) ────────────────────────
-// PM10 농도가 50 초과인 측정소 집계 (Lazy 실행)
+
 v result = load("examples/seoul_air_2026.csv") :: AirQuality
-  |> filter(pm10 > 50)
-  |> select([station, date, pm10])
+  |> filter(pm25 > 15)
+  |> select([station, date, pm25])
   |> count;
