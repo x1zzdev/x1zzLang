@@ -1,27 +1,23 @@
 /// x1zzLang - 재귀 하강 파서 (완전 구현)
 ///
-/// 지원 문법:
+/// tokens / pos 필드 모두 실제 로직에서 사용 → dead_code 경고 없음.
 ///
+/// BNF:
 ///   program        = stmt* EOF
 ///   stmt           = type_decl | var_stmt
-///
-///   type_decl      = "type" IDENT "=" "{" field_list "}" ";"
+///   type_decl      = "type" IDENT "=" "{" field_list "}" ";"?
 ///   field_list     = (field ("," field)* ","?)?
 ///   field          = IDENT ":" type_name
 ///   type_name      = "Option" "<" IDENT ">" | IDENT
-///
-///   var_stmt       = ("mut")? "v" IDENT "=" pipeline_expr ";"
+///   var_stmt       = "mut"? "v" IDENT "=" pipeline_expr ";"?
 ///   pipeline_expr  = load_expr ("|>" pipeline_op)*
 ///   load_expr      = "load" "(" STRING_LIT ")" "::" IDENT
-///
-///   pipeline_op    = filter_op | select_op | "count"
-///   filter_op      = "filter" "(" expr ")"
-///   select_op      = "select" "(" "[" ident_list "]" ")"
-///   ident_list     = (IDENT ("," IDENT)* ","?)?
-///
+///   pipeline_op    = "filter" "(" expr ")"
+///                  | "select" "(" "[" ident_list "]" ")"
+///                  | "count"
 ///   expr           = primary (binop primary)?
 ///   primary        = IDENT | INT_LIT | FLOAT_LIT | STRING_LIT | "(" expr ")"
-///   binop          = ">" | "<" | ">=" | "<=" | "==" | "!="
+///   binop          = "==" | "!=" | "<" | ">" | "<=" | ">="
 
 use crate::ast::{BinOpKind, Expr, PipelineOp, Program, Stmt, StructField};
 use crate::error::{CompileError, CompileResult, ErrorKind};
@@ -37,17 +33,19 @@ impl Parser {
         Parser { tokens, pos: 0 }
     }
 
-    // ── 기본 헬퍼 ────────────────────────────────────────────────────────────
+    // ── 내부 헬퍼 ─────────────────────────────────────────────────────────────
+    // tokens 및 pos 필드를 직접 읽는 메서드들
 
-    /// 현재 토큰 kind를 Clone하여 반환 (빌림 검사기 안전)
+    /// 현재 위치의 TokenKind를 Clone하여 반환
     fn current_kind(&self) -> TokenKind {
+        // self.tokens[self.pos] — 두 필드 모두 읽음
         self.tokens
             .get(self.pos)
             .map(|t| t.kind.clone())
             .unwrap_or(TokenKind::Eof)
     }
 
-    /// 현재 토큰 스팬을 Clone하여 반환
+    /// 현재 위치의 Span을 Clone하여 반환
     fn current_span(&self) -> Span {
         self.tokens
             .get(self.pos)
@@ -55,17 +53,17 @@ impl Parser {
             .unwrap_or(Span::new(0, 0))
     }
 
-    /// 현재 토큰을 소비하고 pos를 전진 (반환값 없음 — 빌림 검사기 안전)
+    /// 현재 토큰을 소비하고 pos 전진 (두 필드 모두 변경)
     fn advance(&mut self) {
-        if self.pos < self.tokens.len().saturating_sub(1) {
+        if self.pos + 1 < self.tokens.len() {
             self.pos += 1;
         }
     }
 
-    /// 현재 kind가 expected와 같으면 소비, 아니면 에러
+    /// 기대 토큰이면 소비, 아니면 에러
     fn expect(&mut self, expected: &TokenKind) -> CompileResult<Span> {
-        let kind = self.current_kind();
-        let span = self.current_span();
+        let kind = self.current_kind();   // tokens[pos].kind 읽음
+        let span = self.current_span();   // tokens[pos].span 읽음
         if kind == *expected {
             self.advance();
             Ok(span)
@@ -73,12 +71,12 @@ impl Parser {
             Err(CompileError::new(
                 ErrorKind::ExpectedToken(format!("{:?}", expected)),
                 span,
-                format!("예상: {:?}, 실제: {:?}", expected, kind),
+                format!("예상 {:?}, 실제 {:?}", expected, kind),
             ))
         }
     }
 
-    /// 현재 kind가 일치하면 소비하고 true 반환
+    /// 기대 토큰이면 소비하고 true
     fn eat(&mut self, kind: &TokenKind) -> bool {
         if self.current_kind() == *kind {
             self.advance();
@@ -89,39 +87,38 @@ impl Parser {
     }
 
     fn is_eof(&self) -> bool {
-        matches!(self.current_kind(), TokenKind::Eof)
+        self.pos >= self.tokens.len().saturating_sub(1)
+            || matches!(self.current_kind(), TokenKind::Eof)
     }
 
-    // ── 최상위 파서 ──────────────────────────────────────────────────────────
+    // ── 최상위 ────────────────────────────────────────────────────────────────
 
     pub fn parse(&mut self) -> CompileResult<Program> {
         let mut program = Program::new();
         while !self.is_eof() {
-            let stmt = self.parse_stmt()?;
-            program.stmts.push(stmt);
+            program.stmts.push(self.parse_stmt()?);
         }
         Ok(program)
     }
 
-    // ── 구문(Stmt) 파서 ───────────────────────────────────────────────────────
+    // ── Stmt ──────────────────────────────────────────────────────────────────
 
     fn parse_stmt(&mut self) -> CompileResult<Stmt> {
-        // current_kind() 를 먼저 clone하여 self 의 빌림을 해제한 뒤 분기
         match self.current_kind() {
-            TokenKind::Type       => self.parse_type_decl(),
+            TokenKind::Type      => self.parse_type_decl(),
             TokenKind::V
-            | TokenKind::Mut      => self.parse_var_stmt(),
-            other                 => Err(CompileError::new(
+            | TokenKind::Mut     => self.parse_var_stmt(),
+            other                => Err(CompileError::new(
                 ErrorKind::UnexpectedToken(format!("{:?}", other)),
                 self.current_span(),
-                format!("구문 시작에 올 수 없는 토큰: {:?}", other),
+                format!("구문 시작 불가 토큰: {:?}", other),
             )),
         }
     }
 
-    // ── TypeDecl 파서 ─────────────────────────────────────────────────────────
+    // ── TypeDecl ─────────────────────────────────────────────────────────────
     //
-    // type_decl = "type" IDENT "=" "{" field_list "}" ";"
+    // type_decl = "type" IDENT "=" "{" field_list "}" ";"?
 
     fn parse_type_decl(&mut self) -> CompileResult<Stmt> {
         self.expect(&TokenKind::Type)?;
@@ -137,9 +134,8 @@ impl Parser {
     fn parse_field_list(&mut self) -> CompileResult<Vec<StructField>> {
         let mut fields = Vec::new();
         loop {
-            match self.current_kind() {
-                TokenKind::RBrace | TokenKind::Eof => break,
-                _ => {}
+            if matches!(self.current_kind(), TokenKind::RBrace | TokenKind::Eof) {
+                break;
             }
             fields.push(self.parse_field()?);
             if !self.eat(&TokenKind::Comma) {
@@ -174,26 +170,25 @@ impl Parser {
         }
     }
 
-    // ── var_stmt 파서 ─────────────────────────────────────────────────────────
+    // ── var_stmt ─────────────────────────────────────────────────────────────
     //
-    // var_stmt = ("mut")? "v" IDENT "=" pipeline_expr ";"
+    // var_stmt = "mut"? "v" IDENT "=" pipeline_expr ";"?
 
     fn parse_var_stmt(&mut self) -> CompileResult<Stmt> {
-        self.eat(&TokenKind::Mut);             // mut 선택적 소비 (AST에 저장하지 않음)
+        self.eat(&TokenKind::Mut);
         self.expect(&TokenKind::V)?;
-        let _var_name = self.expect_ident()?;  // 변수명 (현재 AST 구조에 저장하지 않음)
+        let _var_name = self.expect_ident()?;  // 현재 AST에 저장하지 않음
         self.expect(&TokenKind::Assign)?;
-        let stmt = self.parse_pipeline_expr()?;
+        let stmt = self.parse_pipeline_stream()?;
         self.eat(&TokenKind::Semicolon);
         Ok(stmt)
     }
 
-    // ── pipeline_expr 파서 ────────────────────────────────────────────────────
+    // ── PipelineStream (핵심) ─────────────────────────────────────────────────
     //
-    // pipeline_expr = load_expr ("|>" pipeline_op)*
-    // load_expr     = "load" "(" STRING_LIT ")" "::" IDENT
+    // load_expr = "load" "(" STRING_LIT ")" "::" IDENT ("|>" op)*
 
-    fn parse_pipeline_expr(&mut self) -> CompileResult<Stmt> {
+    fn parse_pipeline_stream(&mut self) -> CompileResult<Stmt> {
         self.expect(&TokenKind::Load)?;
         self.expect(&TokenKind::LParen)?;
 
@@ -206,98 +201,80 @@ impl Parser {
                 return Err(CompileError::new(
                     ErrorKind::ExpectedToken("StringLit".into()),
                     self.current_span(),
-                    format!("load() 에 문자열 리터럴 필요. 실제: {:?}", other),
-                ));
+                    format!("load() 경로는 문자열 리터럴. 실제: {:?}", other),
+                ))
             }
         };
 
         self.expect(&TokenKind::RParen)?;
-        self.expect(&TokenKind::TypeAssign)?; // ::
+        self.expect(&TokenKind::TypeAssign)?;  // ::
         let schema_name = self.expect_ident()?;
 
         let mut ops: Vec<PipelineOp> = Vec::new();
         while matches!(self.current_kind(), TokenKind::Pipeline) {
-            self.advance(); // |> 소비
-            let op = self.parse_pipeline_op()?;
-            ops.push(op);
+            self.advance();  // |> 소비
+            ops.push(self.parse_pipeline_op()?);
         }
 
-        Ok(Stmt::PipelineStream {
-            file_path,
-            schema_name,
-            ops,
-        })
+        Ok(Stmt::PipelineStream { file_path, schema_name, ops })
     }
 
-    // ── pipeline_op 파서 ──────────────────────────────────────────────────────
+    // ── PipelineOp ───────────────────────────────────────────────────────────
 
     fn parse_pipeline_op(&mut self) -> CompileResult<PipelineOp> {
         match self.current_kind() {
-            TokenKind::Filter => self.parse_filter_op(),
-            TokenKind::Select => self.parse_select_op(),
-            TokenKind::Count  => {
+            TokenKind::Filter => {
+                self.advance();
+                self.expect(&TokenKind::LParen)?;
+                let expr = self.parse_expr()?;
+                self.expect(&TokenKind::RParen)?;
+                Ok(PipelineOp::Filter(expr))
+            }
+            TokenKind::Select => {
+                self.advance();
+                self.expect(&TokenKind::LParen)?;
+                self.expect(&TokenKind::LBracket)?;
+
+                let mut cols = Vec::new();
+                loop {
+                    if matches!(self.current_kind(), TokenKind::RBracket | TokenKind::Eof) {
+                        break;
+                    }
+                    cols.push(self.expect_ident()?);
+                    if !self.eat(&TokenKind::Comma) {
+                        break;
+                    }
+                    if matches!(self.current_kind(), TokenKind::RBracket) {
+                        break;
+                    }
+                }
+
+                self.expect(&TokenKind::RBracket)?;
+                self.expect(&TokenKind::RParen)?;
+                Ok(PipelineOp::Select(cols))
+            }
+            TokenKind::Count => {
                 self.advance();
                 Ok(PipelineOp::Count)
             }
             other => Err(CompileError::new(
                 ErrorKind::UnexpectedToken(format!("{:?}", other)),
                 self.current_span(),
-                format!("|> 뒤에 올 수 없는 연산: {:?}", other),
+                format!("|> 뒤 불가 연산: {:?}", other),
             )),
         }
     }
 
-    /// filter_op = "filter" "(" expr ")"
-    fn parse_filter_op(&mut self) -> CompileResult<PipelineOp> {
-        self.expect(&TokenKind::Filter)?;
-        self.expect(&TokenKind::LParen)?;
-        let expr = self.parse_expr()?;
-        self.expect(&TokenKind::RParen)?;
-        Ok(PipelineOp::Filter(expr))
-    }
-
-    /// select_op = "select" "(" "[" ident_list "]" ")"
-    fn parse_select_op(&mut self) -> CompileResult<PipelineOp> {
-        self.expect(&TokenKind::Select)?;
-        self.expect(&TokenKind::LParen)?;
-        self.expect(&TokenKind::LBracket)?;
-
-        let mut cols: Vec<String> = Vec::new();
-        loop {
-            match self.current_kind() {
-                TokenKind::RBracket | TokenKind::Eof => break,
-                _ => {}
-            }
-            cols.push(self.expect_ident()?);
-            if !self.eat(&TokenKind::Comma) {
-                break;
-            }
-            if matches!(self.current_kind(), TokenKind::RBracket) {
-                break;
-            }
-        }
-
-        self.expect(&TokenKind::RBracket)?;
-        self.expect(&TokenKind::RParen)?;
-        Ok(PipelineOp::Select(cols))
-    }
-
-    // ── 표현식 파서 ───────────────────────────────────────────────────────────
+    // ── 표현식 ───────────────────────────────────────────────────────────────
     //
-    // expr    = primary (binop primary)?
-    // primary = IDENT | INT_LIT | FLOAT_LIT | STRING_LIT | "(" expr ")"
-    // binop   = ">" | "<" | ">=" | "<=" | "==" | "!="
+    // expr = primary (binop primary)?
 
     fn parse_expr(&mut self) -> CompileResult<Expr> {
         let lhs = self.parse_primary()?;
         if let Some(op) = self.current_binop() {
-            self.advance(); // 연산자 소비
+            self.advance();
             let rhs = self.parse_primary()?;
-            Ok(Expr::BinOp {
-                lhs: Box::new(lhs),
-                op,
-                rhs: Box::new(rhs),
-            })
+            Ok(Expr::BinOp { lhs: Box::new(lhs), op, rhs: Box::new(rhs) })
         } else {
             Ok(lhs)
         }
@@ -342,14 +319,13 @@ impl Parser {
             other => Err(CompileError::new(
                 ErrorKind::UnexpectedToken(format!("{:?}", other)),
                 self.current_span(),
-                format!("표현식에 올 수 없는 토큰: {:?}", other),
+                format!("표현식 불가 토큰: {:?}", other),
             )),
         }
     }
 
     // ── 유틸리티 ─────────────────────────────────────────────────────────────
 
-    /// 현재 토큰이 Ident이면 소비하고 String 반환
     fn expect_ident(&mut self) -> CompileResult<String> {
         match self.current_kind() {
             TokenKind::Ident(s) => {
@@ -359,7 +335,7 @@ impl Parser {
             other => Err(CompileError::new(
                 ErrorKind::ExpectedToken("Ident".into()),
                 self.current_span(),
-                format!("식별자가 필요합니다. 실제: {:?}", other),
+                format!("식별자 필요, 실제: {:?}", other),
             )),
         }
     }

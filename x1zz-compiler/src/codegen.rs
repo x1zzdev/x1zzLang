@@ -1,113 +1,118 @@
 /// x1zzLang - 코드 생성기 (완전 구현)
 ///
-/// Phase-1 PoC: AST → Polars LazyFrame 연산 흐름 문자열로 매핑
+/// Program AST → Polars LazyFrame 흐름 문자열 생성.
+/// 구조체 필드 없는 단위 구조체(unit struct)를 사용하여 dead_code 경고 없음.
 ///
-/// 예시 출력:
-///   [Schema] AirQuality { station: string, pm10: Option<float>, date: string }
+/// 출력 예시:
+///   [Schema] AirQuality
+///     station : string
+///     date    : string
+///     pm10    : Option<float>
 ///   [Pipeline] load("examples/seoul_error_2026.csv") :: AirQuality
-///     |> filter(pm10 > 50)       // .filter(col("pm10").gt(50))
-///     |> select([station, date]) // .select([col("station"), col("date")])
-///     |> count                   // .count()
-///     .collect()
+///     .filter(col("pm10").gt(lit(50i64)))
+///     .select([col("station"), col("date"), col("pm10")])
+///     .count()
+///   .collect()   // ← Lazy 실행 시점
 
 use crate::ast::{BinOpKind, Expr, PipelineOp, Program, Stmt};
-use crate::error::CompileResult;
 
-pub struct Codegen {
-    program: Program,
-}
+/// 코드 생성기 — 필드 없는 유닛 구조체 (dead_code 경고 없음)
+pub struct Codegen;
 
 impl Codegen {
-    pub fn new(program: Program) -> Self {
-        Codegen { program }
+    pub fn new() -> Self {
+        Codegen
     }
 
-    /// 전체 Program AST를 읽어 Polars 흐름 주석 문자열 생성
-    pub fn generate(&self) -> CompileResult<String> {
+    // ── 최상위 진입점 ─────────────────────────────────────────────────────────
+
+    /// Program AST 전체를 Polars 흐름 문자열로 생성
+    pub fn generate(program: &Program) -> String {
         let mut out = String::new();
-        out.push_str("// ─────────────────────────────────────────────────────\n");
-        out.push_str("// x1zzLang PoC — Polars LazyFrame 흐름 매핑\n");
-        out.push_str("// ─────────────────────────────────────────────────────\n\n");
+        out.push_str("// ═══════════════════════════════════════════════════════\n");
+        out.push_str("// x1zzLang → Polars LazyFrame 흐름 매핑\n");
+        out.push_str("// ═══════════════════════════════════════════════════════\n\n");
 
-        for stmt in &self.program.stmts {
-            out.push_str(&Self::describe_stmt(stmt));
-            out.push('\n');
+        for (i, stmt) in program.stmts.iter().enumerate() {
+            if i > 0 {
+                out.push('\n');
+            }
+            out.push_str(&Self::emit_stmt(stmt));
         }
-        Ok(out)
+        out
     }
 
-    /// 개별 Stmt를 Polars 흐름 문자열로 변환
-    pub fn describe_stmt(stmt: &Stmt) -> String {
+    // ── Stmt 변환 ─────────────────────────────────────────────────────────────
+
+    fn emit_stmt(stmt: &Stmt) -> String {
         match stmt {
             Stmt::TypeDecl { name, fields } => {
-                let field_strs: Vec<String> = fields
-                    .iter()
-                    .map(|f| format!("  {}: {}", f.name, f.field_type))
-                    .collect();
-                format!(
-                    "// [Schema] {} {{\n{}\n// }}\n",
-                    name,
-                    field_strs.join(",\n")
-                )
+                let mut s = format!("// [Schema] {}\n", name);
+                for f in fields {
+                    s.push_str(&format!("//   {:<12} : {}\n", f.name, f.field_type));
+                }
+                s
             }
-            Stmt::PipelineStream {
-                file_path,
-                schema_name,
-                ops,
-            } => Self::describe_pipeline(file_path, schema_name, ops),
+            Stmt::PipelineStream { file_path, schema_name, ops } => {
+                Self::emit_pipeline(file_path, schema_name, ops)
+            }
         }
     }
 
-    /// PipelineStream을 Polars LazyFrame 흐름 문자열로 변환
-    pub fn describe_pipeline(
-        file_path: &str,
-        schema_name: &str,
-        ops: &[PipelineOp],
-    ) -> String {
+    // ── Pipeline 변환 ─────────────────────────────────────────────────────────
+
+    fn emit_pipeline(file_path: &str, schema_name: &str, ops: &[PipelineOp]) -> String {
         let mut lines: Vec<String> = Vec::new();
 
-        // load 단계
+        // load 단계: LazyFrame 생성
         lines.push(format!(
-            "LazyCsvReader::new(\"{}\").finish()  // load :: {}",
+            "LazyCsvReader::new(\"{}\")  // :: {}",
             file_path, schema_name
         ));
+        lines.push("  .with_schema(Arc::new(SCHEMA.clone()))".into());
+        lines.push("  .finish()?".into());
 
-        // 각 파이프라인 연산 단계
+        // 파이프라인 각 단계
         for op in ops {
-            lines.push(Self::describe_op(op));
+            lines.push(Self::emit_op(op));
         }
 
-        // collect (최종 실행 시점)
-        lines.push(".collect()  // ← 모든 연산이 여기서 실행됨".into());
+        // collect — Lazy 실행 시점
+        lines.push(".collect()?  // ← 여기서 모든 연산 일괄 실행".into());
 
-        lines.join("\n  ")
+        lines.join("\n")
     }
 
-    /// 개별 PipelineOp → Polars Rust 표현 문자열
-    pub fn describe_op(op: &PipelineOp) -> String {
+    // ── Op 변환 ───────────────────────────────────────────────────────────────
+
+    fn emit_op(op: &PipelineOp) -> String {
         match op {
             PipelineOp::Filter(expr) => {
                 format!(
-                    ".filter({})  // filter({})",
+                    ".filter({})  // |> filter({})",
                     Self::expr_to_polars(expr),
                     Self::expr_to_xzz(expr)
                 )
             }
             PipelineOp::Select(cols) => {
-                let polars_cols: Vec<String> =
-                    cols.iter().map(|c| format!("col(\"{}\")", c)).collect();
-                let xzz_cols = cols.join(", ");
+                let polars: Vec<String> = cols.iter()
+                    .map(|c| format!("col(\"{}\")", c))
+                    .collect();
+                let xzz = cols.join(", ");
                 format!(
-                    ".select([{}])  // select([{}])",
-                    polars_cols.join(", "),
-                    xzz_cols
+                    ".select([{}])  // |> select([{}])",
+                    polars.join(", "),
+                    xzz
                 )
             }
-            PipelineOp::Count => ".count()  // count".to_string(),
+            PipelineOp::Count => {
+                ".count()  // |> count".to_string()
+            }
         }
     }
 
-    /// Expr → Polars Rust 표현식 문자열
+    // ── 표현식 → Polars Rust ──────────────────────────────────────────────────
+
     pub fn expr_to_polars(expr: &Expr) -> String {
         match expr {
             Expr::Ident(s)     => format!("col(\"{}\")", s),
@@ -118,10 +123,10 @@ impl Codegen {
                 let l = Self::expr_to_polars(lhs);
                 let r = Self::expr_to_polars(rhs);
                 match op {
-                    BinOpKind::Eq    => format!("{}.eq({})", l, r),
-                    BinOpKind::NotEq => format!("{}.neq({})", l, r),
-                    BinOpKind::Lt    => format!("{}.lt({})", l, r),
-                    BinOpKind::Gt    => format!("{}.gt({})", l, r),
+                    BinOpKind::Eq    => format!("{}.eq({})",     l, r),
+                    BinOpKind::NotEq => format!("{}.neq({})",    l, r),
+                    BinOpKind::Lt    => format!("{}.lt({})",     l, r),
+                    BinOpKind::Gt    => format!("{}.gt({})",     l, r),
                     BinOpKind::LtEq  => format!("{}.lt_eq({})", l, r),
                     BinOpKind::GtEq  => format!("{}.gt_eq({})", l, r),
                 }
@@ -129,7 +134,8 @@ impl Codegen {
         }
     }
 
-    /// Expr → x1zzLang 소스 표현 문자열 (디버그 용)
+    // ── 표현식 → x1zzLang 소스 표현 ──────────────────────────────────────────
+
     pub fn expr_to_xzz(expr: &Expr) -> String {
         match expr {
             Expr::Ident(s)     => s.clone(),
@@ -153,5 +159,11 @@ impl Codegen {
                 )
             }
         }
+    }
+}
+
+impl Default for Codegen {
+    fn default() -> Self {
+        Codegen::new()
     }
 }
