@@ -1,14 +1,7 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+// ============================================================
+// lib.rs — x1zz-sde 크레이트 루트
+// ============================================================
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+/// SDE (Synthetic Data Engine) 모듈
+/// sde_params.toml 기반으로 AI 학습 데이터를 합성 생성합니다.
+pub mod sde;

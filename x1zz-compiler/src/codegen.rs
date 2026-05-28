@@ -1,22 +1,21 @@
-/// x1zzLang - 코드 생성기 (완전 구현)
+/// x1zzLang - 코드 생성기 (v0.15)
 ///
 /// Program AST → Polars LazyFrame 흐름 문자열 생성.
-/// 구조체 필드 없는 단위 구조체(unit struct)를 사용하여 dead_code 경고 없음.
 ///
 /// 출력 예시:
-///   [Schema] AirQuality
-///     station : string
-///     date    : string
-///     pm10    : Option<float>
-///   [Pipeline] load("examples/seoul_error_2026.csv") :: AirQuality
-///     .filter(col("pm10").gt(lit(50i64)))
-///     .select([col("station"), col("date"), col("pm10")])
-///     .count()
-///   .collect()   // ← Lazy 실행 시점
+///   // [Schema] AirQuality
+///   //   station      : string
+///   //   pm10         : Option<float>
+///
+///   // [VarDecl] result = load("examples/seoul_air_2026.csv") :: AirQuality
+///   let result = LazyCsvReader::new("examples/seoul_air_2026.csv")
+///       .finish()?
+///       .filter(col("pm10").gt(lit(50i64)))
+///       .collect()?;
 
-use crate::ast::{BinOpKind, Expr, PipelineOp, Program, Stmt};
+use crate::ast::{BinOpKind, Expr, PipelineOp, PipelineSource, Program, Stmt};
 
-/// 코드 생성기 — 필드 없는 유닛 구조체 (dead_code 경고 없음)
+/// 코드 생성기 — 유닛 구조체
 pub struct Codegen;
 
 impl Codegen {
@@ -53,24 +52,54 @@ impl Codegen {
                 }
                 s
             }
-            Stmt::PipelineStream { file_path, schema_name, ops } => {
-                Self::emit_pipeline(file_path, schema_name, ops)
+            Stmt::VarDecl { var_name, is_mut, source, ops } => {
+                Self::emit_var_decl(var_name, *is_mut, source, ops)
             }
         }
     }
 
-    // ── Pipeline 변환 ─────────────────────────────────────────────────────────
+    // ── VarDecl 변환 ──────────────────────────────────────────────────────────
 
-    fn emit_pipeline(file_path: &str, schema_name: &str, ops: &[PipelineOp]) -> String {
+    fn emit_var_decl(
+        var_name: &str,
+        is_mut: bool,
+        source: &PipelineSource,
+        ops: &[PipelineOp],
+    ) -> String {
         let mut lines: Vec<String> = Vec::new();
 
-        // load 단계: LazyFrame 생성
+        // 주석 헤더
+        let source_comment = match source {
+            PipelineSource::Load { file_path, schema_name } => {
+                format!("load(\"{}\") :: {}", file_path, schema_name)
+            }
+            PipelineSource::VarRef(name) => {
+                format!("{} (varref)", name)
+            }
+        };
+        let mut_kw = if is_mut { "mut " } else { "" };
         lines.push(format!(
-            "LazyCsvReader::new(\"{}\")  // :: {}",
-            file_path, schema_name
+            "// [VarDecl] {}v {} = {}",
+            mut_kw, var_name, source_comment
         ));
-        lines.push("  .with_schema(Arc::new(SCHEMA.clone()))".into());
-        lines.push("  .finish()?".into());
+
+        // 소스 코드 생성
+        match source {
+            PipelineSource::Load { file_path, schema_name } => {
+                lines.push(format!(
+                    "let {} = LazyCsvReader::new(\"{}\")  // :: {}",
+                    var_name, file_path, schema_name
+                ));
+                lines.push("  .with_has_header(true)".into());
+                lines.push("  .finish()?".into());
+            }
+            PipelineSource::VarRef(src_var) => {
+                lines.push(format!(
+                    "let {} = {}.clone().lazy()",
+                    var_name, src_var
+                ));
+            }
+        }
 
         // 파이프라인 각 단계
         for op in ops {
@@ -78,7 +107,7 @@ impl Codegen {
         }
 
         // collect — Lazy 실행 시점
-        lines.push(".collect()?  // ← 여기서 모든 연산 일괄 실행".into());
+        lines.push(format!("  .collect()?;  // ← {}: 모든 연산 일괄 실행", var_name));
 
         lines.join("\n")
     }
@@ -89,7 +118,7 @@ impl Codegen {
         match op {
             PipelineOp::Filter(expr) => {
                 format!(
-                    ".filter({})  // |> filter({})",
+                    "  .filter({})  // |> filter({})",
                     Self::expr_to_polars(expr),
                     Self::expr_to_xzz(expr)
                 )
@@ -100,13 +129,13 @@ impl Codegen {
                     .collect();
                 let xzz = cols.join(", ");
                 format!(
-                    ".select([{}])  // |> select([{}])",
+                    "  .select([{}])  // |> select([{}])",
                     polars.join(", "),
                     xzz
                 )
             }
             PipelineOp::Count => {
-                ".count()  // |> count".to_string()
+                "  // |> count  →  df.height() 로 행 수 확인".to_string()
             }
         }
     }

@@ -1,36 +1,33 @@
-// x1zz-compiler/src/main.rs
+// x1zz-compiler/src/main.rs  (v0.15)
 //
 // 완전한 실행 파이프라인:
 //   1. fs::read_to_string       — .xzz 소스 파일 로드
 //   2. Lexer::tokenize()        — 문자 스트림 → Token 배열
 //   3. Parser::parse()          — Token 배열 → Program AST
 //   4. Codegen::generate()      — AST → Polars 흐름 매핑 문자열 (출력용)
-//   5. Polars 런타임 엔진        — AST 기반 실제 LazyFrame CSV 실행 → DataFrame 출력
+//   5. Runtime 엔진             — SymbolTable + TypeRegistry 기반 다중 파이프라인 실행
+//      5-A) TypeRegistry 구축   — TypeDecl 수집 (스키마 정의)
+//      5-B) VarDecl 순차 실행   — 소스 결정(Load/VarRef) → Dynamic Bridge → 타입 검증 → Op 적용
+//      5-C) SymbolTable 저장    — var_name → DataFrame
 //
-// 글로브 임포트(use polars::prelude::*) 금지
-//   → x1zz_compiler::Expr와 polars::prelude::Expr 이름 충돌 방지
+// [변경 사항 v0.15]
+//   - SymbolTable: HashMap<String, DataFrame> — 다중 파이프라인 변수 연결
+//   - TypeRegistry: HashMap<String, Vec<StructField>> — 스키마 정보 런타임 전달
+//   - Dynamic Schema Bridge — CSV 헤더를 스키마 필드에 위치 기반 동적 매핑
+//   - 타입 검증/Null 처리 — Option<T> vs 필수 타입 런타임 체크
+//   - 사용자 친화적 에러 포맷 — "구문 에러 [Line X: Col Y]: ..."
 
+use std::collections::HashMap;
 use std::fs;
-use x1zz_compiler::{Codegen, Lexer, Parser};
+use x1zz_compiler::{Codegen, Lexer, Parser, PipelineSource, StructField};
 
-// ── 한글 컬럼 → 영어 AST 식별자 브릿지 ──────────────────────────────────────
-// seoul_air_2026.csv 실제 헤더 기준 (읽기 전용 상수 — 런타임 참조)
-const BRIDGE_OLD: &[&str] = &[
-    "일시",
-    "구분",
-    "미세먼지(PM10)",
-    "초미세먼지(PM25)",
-];
-const BRIDGE_NEW: &[&str] = &["date", "station", "pm10", "pm25"];
-
-// ── AST Expr → polars Expr 변환 (재귀) ──────────────────────────────────────
-// polars는 구체 임포트만 사용하여 Expr 이름 충돌 회피
+// ── AST Expr → Polars Expr 변환 ──────────────────────────────────────────────
 fn to_polars_expr(expr: &x1zz_compiler::Expr) -> polars::prelude::Expr {
     use polars::prelude::{col, lit};
     match expr {
-        x1zz_compiler::Expr::Ident(s) => col(s.as_str()),
-        x1zz_compiler::Expr::IntLit(n) => lit(*n),
-        x1zz_compiler::Expr::FloatLit(f) => lit(*f),
+        x1zz_compiler::Expr::Ident(s)     => col(s.as_str()),
+        x1zz_compiler::Expr::IntLit(n)    => lit(*n),
+        x1zz_compiler::Expr::FloatLit(f)  => lit(*f),
         x1zz_compiler::Expr::StringLit(s) => lit(s.clone()),
         x1zz_compiler::Expr::BinOp { lhs, op, rhs } => {
             let l = to_polars_expr(lhs);
@@ -47,28 +44,100 @@ fn to_polars_expr(expr: &x1zz_compiler::Expr) -> polars::prelude::Expr {
     }
 }
 
-// ── Polars 런타임 엔진 ────────────────────────────────────────────────────────
-// 인코딩 처리 전략:
-//   1. 파일을 raw bytes로 읽음
-//   2. UTF-8 직접 파싱 시도 → 실패 시 EUC-KR(CP949)으로 디코딩
-//   3. UTF-8 바이트를 Cursor<Vec<u8>>로 감싸서 CsvReader에 전달
-fn execute_pipeline(
-    file_path: &str,
+// ── Dynamic Schema Bridge ─────────────────────────────────────────────────────
+// CSV 실제 헤더와 스키마 필드를 위치(인덱스) 기반으로 동적 매핑한다.
+// 필드 수보다 CSV 컬럼이 많으면 초과 컬럼은 그대로 유지.
+// 필드 수보다 CSV 컬럼이 적으면 매핑 가능한 범위까지만 처리한다.
+fn apply_dynamic_bridge(
+    lf: polars::prelude::LazyFrame,
+    csv_headers: &[String],
+    schema_fields: &[StructField],
+) -> polars::prelude::LazyFrame {
+    let map_count = csv_headers.len().min(schema_fields.len());
+
+    let old_names: Vec<&str> = csv_headers[..map_count]
+        .iter()
+        .map(String::as_str)
+        .collect();
+    let new_names: Vec<&str> = schema_fields[..map_count]
+        .iter()
+        .map(|f| f.name.as_str())
+        .collect();
+
+    // 같은 이름이면 rename 불필요 → 필터링
+    let (rename_old, rename_new): (Vec<&str>, Vec<&str>) = old_names
+        .iter()
+        .zip(new_names.iter())
+        .filter(|(o, n)| o != n)
+        .map(|(o, n)| (*o, *n))
+        .unzip();
+
+    if rename_old.is_empty() {
+        println!("  ▶ Schema Bridge: 이미 일치하는 헤더, rename 생략");
+        lf
+    } else {
+        println!(
+            "  ▶ Schema Bridge: {} 개 컬럼 동적 매핑",
+            rename_old.len()
+        );
+        for (o, n) in rename_old.iter().zip(rename_new.iter()) {
+            println!("     '{}' → '{}'", o, n);
+        }
+        lf.rename(rename_old, rename_new, false)
+    }
+}
+
+// ── 타입 검증 / Null 처리 ─────────────────────────────────────────────────────
+// 스키마 필드의 타입 선언과 실제 DataFrame 컬럼 상태를 비교.
+// Option<T>이 아닌 필수 필드에 null이 있으면 경고/패닉 방침 선택.
+fn validate_schema_types(
+    df: &polars::frame::DataFrame,
     schema_name: &str,
-    ops: &[x1zz_compiler::PipelineOp],
+    schema_fields: &[StructField],
+) {
+    println!("  ▶ 타입 검증: schema '{}'", schema_name);
+    for field in schema_fields {
+        let is_optional = field.field_type.starts_with("Option<");
+        match df.column(&field.name) {
+            Ok(series) => {
+                let null_count = series.null_count();
+                let dtype = series.dtype();
+                if null_count > 0 && !is_optional {
+                    eprintln!(
+                        "  ⚠ Null 위반 [{}]: 필수 필드 '{}' ({}) 에 null {} 개 발견 — 경고(계속 진행)",
+                        schema_name, field.name, dtype, null_count
+                    );
+                } else if null_count > 0 {
+                    println!(
+                        "     ✓ '{}' ({}) — null {} 개 (Option<T> 허용)",
+                        field.name, dtype, null_count
+                    );
+                } else {
+                    println!("     ✓ '{}' ({}) — null 없음", field.name, dtype);
+                }
+            }
+            Err(_) => {
+                eprintln!(
+                    "  ⚠ 스키마 필드 '{}' 를 DataFrame에서 찾을 수 없음 (컬럼 부재)",
+                    field.name
+                );
+            }
+        }
+    }
+}
+
+// ── CSV 로더 (인코딩 자동 처리) ───────────────────────────────────────────────
+fn load_csv_as_df(
+    file_path: &str,
 ) -> Result<polars::frame::DataFrame, Box<dyn std::error::Error>> {
-    use polars::prelude::{col, CsvParseOptions, CsvReadOptions, IntoLazy, NullValues, SerReader};
+    use polars::prelude::{CsvParseOptions, CsvReadOptions, NullValues, SerReader};
     use std::io::Cursor;
 
-    println!(
-        "  ▶ 런타임: '{}' → 스키마 '{}'",
-        file_path, schema_name
-    );
+    println!("  ▶ CSV 로드: '{}'", file_path);
 
-    // STEP 5-A: raw bytes 읽기
     let raw_bytes = std::fs::read(file_path)?;
 
-    // STEP 5-B: UTF-8 시도 → 실패 시 EUC-KR(CP949) 디코딩
+    // UTF-8 직접 시도 → 실패 시 EUC-KR(CP949) 디코딩
     let utf8_string = match String::from_utf8(raw_bytes.clone()) {
         Ok(s) => {
             println!("  ▶ 인코딩: UTF-8 직접 사용");
@@ -86,10 +155,8 @@ fn execute_pipeline(
         }
     };
 
-    // STEP 5-C: UTF-8 바이트를 Cursor로 감싸서 CsvReadOptions로 전달
-    // polars 0.53 API: CsvReadOptions + CsvParseOptions + into_reader_with_file_handle
     let cursor = Cursor::new(utf8_string.into_bytes());
-    let df_raw = CsvReadOptions::default()
+    let df = CsvReadOptions::default()
         .with_infer_schema_length(Some(200))
         .with_parse_options(
             CsvParseOptions::default()
@@ -98,16 +165,87 @@ fn execute_pipeline(
         .into_reader_with_file_handle(cursor)
         .finish()?;
 
-    // STEP 5-D: DataFrame → LazyFrame + 한글 컬럼 → 영어 AST 식별자 이름 변경
-    let mut lf = df_raw.lazy();
-    lf = lf.rename(BRIDGE_OLD.iter().copied(), BRIDGE_NEW.iter().copied(), false);
+    println!(
+        "  ▶ CSV 로드 완료: {} 행 × {} 열",
+        df.height(),
+        df.width()
+    );
+    Ok(df)
+}
 
-    // STEP 5-E: AST 파이프라인 연산 순차 적용
+// ── 단일 파이프라인 실행 ──────────────────────────────────────────────────────
+fn execute_var_decl(
+    var_name: &str,
+    source: &PipelineSource,
+    ops: &[x1zz_compiler::PipelineOp],
+    symbol_table: &HashMap<String, polars::frame::DataFrame>,
+    type_registry: &HashMap<String, Vec<StructField>>,
+) -> Result<polars::frame::DataFrame, Box<dyn std::error::Error>> {
+    use polars::prelude::{col, IntoLazy};
+
+    // ── 소스: LazyFrame 획득 + Dynamic Bridge ────────────────────────────────
+    let (mut lf, schema_fields_opt): (polars::prelude::LazyFrame, Option<Vec<StructField>>) =
+        match source {
+            PipelineSource::Load { file_path, schema_name } => {
+                println!(
+                    "  ▶ 런타임: '{}' → 스키마 '{}'",
+                    file_path, schema_name
+                );
+
+                let df_raw = load_csv_as_df(file_path)?;
+                let csv_headers: Vec<String> = df_raw
+                    .get_column_names()
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect();
+
+                println!("  ▶ CSV 원본 헤더: {:?}", &csv_headers[..csv_headers.len().min(8)]);
+
+                // 스키마 조회
+                let schema_fields = type_registry.get(schema_name.as_str()).cloned();
+                let lf_raw = df_raw.lazy();
+
+                // Dynamic Schema Bridge 적용
+                let lf_bridged = if let Some(ref fields) = schema_fields {
+                    apply_dynamic_bridge(lf_raw, &csv_headers, fields)
+                } else {
+                    println!(
+                        "  ⚠ 스키마 '{}' 미선언 — Bridge 생략 (헤더 그대로 사용)",
+                        schema_name
+                    );
+                    lf_raw
+                };
+
+                (lf_bridged, schema_fields)
+            }
+
+            PipelineSource::VarRef(src_var) => {
+                println!(
+                    "  ▶ 변수 참조: '{}' → '{}'",
+                    src_var, var_name
+                );
+                match symbol_table.get(src_var.as_str()) {
+                    Some(df) => (df.clone().lazy(), None),
+                    None => {
+                        return Err(format!(
+                            "변수 에러: 미선언 변수 '{}' 참조. 이전 파이프라인에서 먼저 선언하세요.",
+                            src_var
+                        )
+                        .into());
+                    }
+                }
+            }
+        };
+
+    // ── 파이프라인 연산 적용 ─────────────────────────────────────────────────
     let mut has_count = false;
     for op in ops {
         match op {
             x1zz_compiler::PipelineOp::Filter(expr) => {
-                println!("  ▶ filter({}) 적용", x1zz_compiler::Codegen::expr_to_xzz(expr));
+                println!(
+                    "  ▶ filter({}) 적용",
+                    x1zz_compiler::Codegen::expr_to_xzz(expr)
+                );
                 lf = lf.filter(to_polars_expr(expr));
             }
             x1zz_compiler::PipelineOp::Select(cols) => {
@@ -117,14 +255,24 @@ fn execute_pipeline(
                 lf = lf.select(exprs);
             }
             x1zz_compiler::PipelineOp::Count => {
-                println!("  ▶ count 적용 (collect 후 행 수 출력)");
+                println!("  ▶ count 플래그 설정 (collect 후 행 수 출력)");
                 has_count = true;
             }
         }
     }
 
-    // STEP 5-F: LazyFrame 실행 (Eager Collect)
+    // ── LazyFrame → DataFrame (Eager Collect) ───────────────────────────────
     let df = lf.collect()?;
+
+    // ── 타입 검증 (Load 소스인 경우) ─────────────────────────────────────────
+    if let Some(ref fields) = schema_fields_opt {
+        // schema_name 추출 (Load 소스)
+        let schema_name = match source {
+            PipelineSource::Load { schema_name, .. } => schema_name.as_str(),
+            _ => "unknown",
+        };
+        validate_schema_types(&df, schema_name, fields);
+    }
 
     if has_count {
         println!("\n  ✅ count 결과: {} 행", df.height());
@@ -147,13 +295,13 @@ fn main() {
     let source = match fs::read_to_string(source_path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("[x1zz ERROR] 파일 읽기 실패: '{}' — {}", source_path, e);
+            eprintln!("IO 에러: 파일 읽기 실패 '{}' — {}", source_path, e);
             std::process::exit(1);
         }
     };
 
     println!("╔═══════════════════════════════════════════════════════════════╗");
-    println!("║  x1zzLang Compiler + Runtime  ·  PoC Build                   ║");
+    println!("║  x1zzLang Compiler + Runtime  ·  PoC v0.15                   ║");
     println!("║  2026 제8회 한국코드페어 대상 목표                               ║");
     println!("╚═══════════════════════════════════════════════════════════════╝");
     println!();
@@ -217,39 +365,63 @@ fn main() {
     println!("└────────────────────────────────────────────────────────────────");
     println!();
 
-    // ── STEP 5: 런타임 엔진 — AST 기반 실제 Polars 실행 ────────────────────
+    // ── STEP 5: 런타임 엔진 ─────────────────────────────────────────────────
     println!("┌─ Polars 런타임 실행 ───────────────────────────────────────────");
 
+    // 5-A: TypeRegistry 구축 — TypeDecl 수집
+    let mut type_registry: HashMap<String, Vec<StructField>> = HashMap::new();
+    for stmt in &program.stmts {
+        if let x1zz_compiler::Stmt::TypeDecl { name, fields } = stmt {
+            println!("│  [TypeRegistry] 스키마 등록: '{}'  ({} 개 필드)", name, fields.len());
+            for f in fields {
+                println!("│     {:<12} : {}", f.name, f.field_type);
+            }
+            type_registry.insert(name.clone(), fields.clone());
+        }
+    }
+    if !type_registry.is_empty() {
+        println!("│");
+    }
+
+    // 5-B: VarDecl 순차 실행 + SymbolTable 관리
+    let mut symbol_table: HashMap<String, polars::frame::DataFrame> = HashMap::new();
     let mut pipeline_count = 0usize;
 
     for stmt in &program.stmts {
-        if let x1zz_compiler::Stmt::PipelineStream {
-            file_path,
-            schema_name,
-            ops,
-        } = stmt
-        {
+        if let x1zz_compiler::Stmt::VarDecl { var_name, is_mut, source, ops } = stmt {
             pipeline_count += 1;
+            let mut_label = if *is_mut { "mut " } else { "" };
             println!("│");
-            println!("│  [Pipeline #{}]", pipeline_count);
+            println!(
+                "│  ═══ [Pipeline #{}] {}v {} ═══",
+                pipeline_count, mut_label, var_name
+            );
 
-            match execute_pipeline(file_path, schema_name, ops) {
+            match execute_var_decl(var_name, source, ops, &symbol_table, &type_registry) {
                 Ok(df) => {
                     println!("│");
                     println!(
-                        "│  ── 결과 DataFrame ({} 행 × {} 열) ──────────────────────",
+                        "│  ── 결과 DataFrame '{}' ({} 행 × {} 열) ──",
+                        var_name,
                         df.height(),
                         df.width()
                     );
                     let df_str = format!("{}", df);
                     for line in df_str.lines() {
-                        println!("│  {}", line);
+                        println!("│    {}", line);
                     }
+
+                    // SymbolTable에 저장 (다음 파이프라인에서 VarRef로 참조 가능)
+                    symbol_table.insert(var_name.clone(), df);
+                    println!(
+                        "│  → 변수 '{}' → SymbolTable 저장 완료",
+                        var_name
+                    );
                 }
                 Err(e) => {
                     eprintln!(
-                        "│  [x1zz RUNTIME ERROR] Pipeline #{} 실패: {}",
-                        pipeline_count, e
+                        "│  [x1zz RUNTIME ERROR] Pipeline #{} ('{}') 실패: {}",
+                        pipeline_count, var_name, e
                     );
                 }
             }
@@ -258,14 +430,32 @@ fn main() {
     }
 
     if pipeline_count == 0 {
-        println!("│  (실행 가능한 PipelineStream 없음)");
+        println!("│  (실행 가능한 VarDecl 없음)");
     }
 
     println!("└────────────────────────────────────────────────────────────────");
     println!();
+
+    // ── SymbolTable 최종 요약 ────────────────────────────────────────────────
+    println!("┌─ SymbolTable 최종 상태 ───────────────────────────────────────");
+    if symbol_table.is_empty() {
+        println!("│  (비어 있음)");
+    } else {
+        for (name, df) in &symbol_table {
+            println!(
+                "│  '{}' = DataFrame({} 행 × {} 열)",
+                name,
+                df.height(),
+                df.width()
+            );
+        }
+    }
+    println!("└────────────────────────────────────────────────────────────────");
+    println!();
     println!(
-        "✅  완료 — AST 노드 {} 개 / 실행된 파이프라인 {} 개",
+        "✅  완료 — AST 노드 {} 개 / 등록된 스키마 {} 개 / 실행된 파이프라인 {} 개",
         program.stmts.len(),
+        type_registry.len(),
         pipeline_count
     );
 }

@@ -1,14 +1,31 @@
+// x1zzLang PoC Script v0.15
+// 2026 제8회 한국코드페어 — x1zzLang 데이터 분석 파이프라인 시연
+//
+// 기능 시연:
+//   1. 타입 선언 (TypeDecl + Option<T>)
+//   2. 변수 선언 + load :: Schema + 파이프라인 연산 (VarDecl)
+//   3. Dynamic Schema Bridge: CSV 한글 헤더 → 스키마 필드 자동 매핑
+//   4. 다중 파이프라인: 변수 참조(VarRef)로 이전 결과 재사용
+//   5. 타입 검증 런타임 체크 (Option<T> vs 필수 타입)
 
+// ── 스키마 정의 ───────────────────────────────────────────────────────────────
+// CSV 컬럼 순서: 일시, 구분, 미세먼지(PM10), 초미세먼지(PM25)
+// Dynamic Bridge가 위치 기반으로 자동 매핑: date, station, pm10, pm25
 type AirQuality = {
-  station: string,
   date: string,
+  station: string,
   pm10: Option<float>,
   pm25: Option<float>,
-  o3: Option<float>,
 };
 
+// ── 파이프라인 1: CSV 로드 + 기본 필터링 ─────────────────────────────────────
+// PM10이 50 초과인 데이터 선별 후 핵심 컬럼만 선택
+v air_raw = load("examples/seoul_air_2008_2011.csv") :: AirQuality
+  |> filter(pm10 > 50)
+  |> select([date, station, pm10, pm25]);
 
-v result = load("examples/seoul_air_2026.csv") :: AirQuality
-  |> filter(pm25 > 15)
-  |> select([station, date, pm25])
+// ── 파이프라인 2: air_raw 참조 (VarRef) — 추가 필터링 ────────────────────────
+// 앞 파이프라인 결과에서 PM25도 10 초과인 것만 추가 필터 + count
+v air_filtered = air_raw
+  |> filter(pm25 > 10)
   |> count;

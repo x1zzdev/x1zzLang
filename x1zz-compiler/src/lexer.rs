@@ -269,3 +269,108 @@ impl<'src> Lexer<'src> {
         Ok(tokens)
     }
 }
+
+// ── 렉서 유닛 테스트 ─────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::token::TokenKind;
+
+    fn tokenize(src: &str) -> Vec<TokenKind> {
+        let mut lexer = Lexer::new(src);
+        lexer
+            .tokenize()
+            .expect("토크나이징 실패")
+            .into_iter()
+            .map(|t| t.kind)
+            .collect()
+    }
+
+    // ── 테스트 1: 변수 선언 키워드 + 파이프라인 연산자(|>) 토크나이징 ────────
+    #[test]
+    fn test_var_decl_and_pipeline_token() {
+        let kinds = tokenize("v result = load(\"data.csv\") :: MySchema |> count");
+        assert!(kinds.contains(&TokenKind::V),            "V 토큰 없음");
+        assert!(kinds.contains(&TokenKind::Assign),       "Assign 토큰 없음");
+        assert!(kinds.contains(&TokenKind::Load),         "Load 토큰 없음");
+        assert!(kinds.contains(&TokenKind::TypeAssign),   "TypeAssign(::) 토큰 없음");
+        assert!(kinds.contains(&TokenKind::Pipeline),     "|> 토큰 없음");
+        assert!(kinds.contains(&TokenKind::Count),        "Count 토큰 없음");
+        assert!(kinds.contains(&TokenKind::Ident("MySchema".into())), "MySchema Ident 없음");
+        assert!(kinds.contains(&TokenKind::StringLit("data.csv".into())), "StringLit 없음");
+    }
+
+    // ── 테스트 2: mut 키워드 + 음수 리터럴 ──────────────────────────────────
+    #[test]
+    fn test_mut_keyword_and_negative_literal() {
+        let kinds = tokenize("mut v x = -42");
+        assert!(kinds.contains(&TokenKind::Mut),           "Mut 토큰 없음");
+        assert!(kinds.contains(&TokenKind::V),             "V 토큰 없음");
+        assert!(kinds.contains(&TokenKind::IntLit(-42)),   "IntLit(-42) 없음");
+    }
+
+    // ── 테스트 3: Option<float> 타입 토크나이징 ─────────────────────────────
+    #[test]
+    fn test_option_type_tokens() {
+        let kinds = tokenize("pm10: Option<float>");
+        assert!(kinds.contains(&TokenKind::Colon),         "Colon 없음");
+        assert!(kinds.contains(&TokenKind::OptionKw),      "OptionKw 없음");
+        assert!(kinds.contains(&TokenKind::Lt),            "Lt(<) 없음");
+        assert!(kinds.contains(&TokenKind::Ident("float".into())), "float Ident 없음");
+        assert!(kinds.contains(&TokenKind::Gt),            "Gt(>) 없음");
+    }
+
+    // ── 테스트 4: 비교 연산자 전체 ──────────────────────────────────────────
+    #[test]
+    fn test_comparison_operators() {
+        let kinds = tokenize("a == b != c < d > e <= f >= g");
+        assert!(kinds.contains(&TokenKind::EqEq));
+        assert!(kinds.contains(&TokenKind::NotEq));
+        assert!(kinds.contains(&TokenKind::Lt));
+        assert!(kinds.contains(&TokenKind::Gt));
+        assert!(kinds.contains(&TokenKind::LtEq));
+        assert!(kinds.contains(&TokenKind::GtEq));
+    }
+
+    // ── 테스트 5: 주석 무시 ─────────────────────────────────────────────────
+    #[test]
+    fn test_comment_ignored() {
+        let kinds = tokenize("v x = 1 // this is a comment\n");
+        // 주석 내용은 토큰으로 나타나지 않아야 함
+        assert!(!kinds.contains(&TokenKind::Slash), "Slash 토큰이 주석에서 생성됨");
+        assert!(kinds.contains(&TokenKind::V));
+        assert!(kinds.contains(&TokenKind::IntLit(1)));
+    }
+
+    // ── 테스트 6: 문자열 이스케이프 ─────────────────────────────────────────
+    #[test]
+    fn test_string_escape_sequences() {
+        let kinds = tokenize(r#""hello\nworld""#);
+        assert!(kinds.contains(&TokenKind::StringLit("hello\nworld".into())));
+    }
+
+    // ── 테스트 7: Span(위치) 추적 정확성 ────────────────────────────────────
+    #[test]
+    fn test_span_tracking() {
+        let src = "v\n result";
+        let mut lexer = Lexer::new(src);
+        let tokens = lexer.tokenize().unwrap();
+        // 첫 토큰 'v' → line 1
+        assert_eq!(tokens[0].span.line, 1);
+        // 두 번째 토큰 'result' → line 2
+        let result_tok = tokens.iter().find(|t| t.kind == TokenKind::Ident("result".into()));
+        assert!(result_tok.is_some());
+        assert_eq!(result_tok.unwrap().span.line, 2);
+    }
+
+    // ── 테스트 8: 알 수 없는 문자 에러 ─────────────────────────────────────
+    #[test]
+    fn test_unknown_char_error() {
+        let mut lexer = Lexer::new("v @ x");
+        let result = lexer.tokenize();
+        assert!(result.is_err(), "@ 문자는 에러여야 함");
+        let err = result.unwrap_err();
+        assert!(matches!(err.kind, crate::error::ErrorKind::UnexpectedChar('@')));
+    }
+}

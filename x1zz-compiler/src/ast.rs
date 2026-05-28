@@ -1,9 +1,9 @@
-/// x1zzLang - AST 노드 정의
+/// x1zzLang - AST 노드 정의 (v0.15)
 
 /// 표현식 노드
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
-    /// 식별자 참조
+    /// 식별자 참조 (변수명 또는 컬럼명)
     Ident(String),
     /// 문자열 리터럴
     StringLit(String),
@@ -41,6 +41,18 @@ pub enum PipelineOp {
     Count,
 }
 
+/// 파이프라인의 소스 (데이터 원천)
+#[derive(Debug, Clone, PartialEq)]
+pub enum PipelineSource {
+    /// load("파일경로") :: SchemaName
+    Load {
+        file_path: String,
+        schema_name: String,
+    },
+    /// 이미 선언된 변수를 참조
+    VarRef(String),
+}
+
 /// 타입 선언의 필드 하나
 #[derive(Debug, Clone, PartialEq)]
 pub struct StructField {
@@ -51,15 +63,16 @@ pub struct StructField {
 /// 최상위 구문 노드
 #[derive(Debug, Clone, PartialEq)]
 pub enum Stmt {
-    /// type <Name> { <fields> }
+    /// type <Name> = { <fields> }
     TypeDecl {
         name: String,
         fields: Vec<StructField>,
     },
-    /// load "<file>" :: <Schema> |> op1 |> op2 ...
-    PipelineStream {
-        file_path: String,
-        schema_name: String,
+    /// (mut)? v <name> = <source> |> op1 |> op2 ...
+    VarDecl {
+        var_name: String,
+        is_mut: bool,
+        source: PipelineSource,
         ops: Vec<PipelineOp>,
     },
 }
