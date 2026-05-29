@@ -104,21 +104,21 @@ fn validate_schema_types(
                 let dtype = series.dtype();
                 if null_count > 0 && !is_optional {
                     eprintln!(
-                        "  ⚠ Null 위반 [{}]: 필수 필드 '{}' ({}) 에 null {} 개 발견 — 경고(계속 진행)",
+                        "  [WARN] Null 위반 [{}]: 필수 필드 '{}' ({}) 에 null {} 개 발견 — 경고(계속 진행)",
                         schema_name, field.name, dtype, null_count
                     );
                 } else if null_count > 0 {
                     println!(
-                        "     ✓ '{}' ({}) — null {} 개 (Option<T> 허용)",
+                        "     [OK] '{}' ({}) — null {} 개 (Option<T> 허용)",
                         field.name, dtype, null_count
                     );
                 } else {
-                    println!("     ✓ '{}' ({}) — null 없음", field.name, dtype);
+                    println!("     [OK] '{}' ({}) — null 없음", field.name, dtype);
                 }
             }
             Err(_) => {
                 eprintln!(
-                    "  ⚠ 스키마 필드 '{}' 를 DataFrame에서 찾을 수 없음 (컬럼 부재)",
+                    "  [WARN] 스키마 필드 '{}' 를 DataFrame에서 찾을 수 없음 (컬럼 부재)",
                     field.name
                 );
             }
@@ -210,7 +210,7 @@ fn execute_var_decl(
                     apply_dynamic_bridge(lf_raw, &csv_headers, fields)
                 } else {
                     println!(
-                        "  ⚠ 스키마 '{}' 미선언 — Bridge 생략 (헤더 그대로 사용)",
+                        "  [WARN] 스키마 '{}' 미선언 — Bridge 생략 (헤더 그대로 사용)",
                         schema_name
                     );
                     lf_raw
@@ -275,7 +275,7 @@ fn execute_var_decl(
     }
 
     if has_count {
-        println!("\n  ✅ count 결과: {} 행", df.height());
+        println!("\n  count 결과: {} 행", df.height());
     }
 
     Ok(df)
@@ -302,7 +302,7 @@ fn main() {
 
     println!("╔═══════════════════════════════════════════════════════════════╗");
     println!("║  x1zzLang Compiler + Runtime  ·  PoC v0.15                   ║");
-    println!("║  2026 제8회 한국코드페어 대상 목표                               ║");
+    println!("║                                                              ║");
     println!("╚═══════════════════════════════════════════════════════════════╝");
     println!();
     println!("▶ 입력 파일 : {}", source_path);
@@ -453,7 +453,7 @@ fn main() {
     println!("└────────────────────────────────────────────────────────────────");
     println!();
     println!(
-        "✅  완료 — AST 노드 {} 개 / 등록된 스키마 {} 개 / 실행된 파이프라인 {} 개",
+        "완료 — AST 노드 {} 개 / 등록된 스키마 {} 개 / 실행된 파이프라인 {} 개",
         program.stmts.len(),
         type_registry.len(),
         pipeline_count
