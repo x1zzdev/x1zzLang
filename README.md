@@ -13,7 +13,9 @@
 
 **Scripting on the surface. Compiled at its core. | The first language where AI is part of the compiler.**
 
-*A language where data analysis is the syntax itself.*
+> 💻 **"If Python/Pandas is the Microsoft Windows of data science, 🍏 x1zzLang is the Apple Mac."** 
+>
+> We tightly integrate the ultimate engine (Rust + Polars) with a custom compiler OS (Incremental Architecture) to eliminate environment friction and deliver predictable, raw performance.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Language: .xzz](https://img.shields.io/badge/Language-.xzz-orange.svg)]()

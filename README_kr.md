@@ -13,7 +13,9 @@
 
 **겉은 스크립트, 속은 컴파일 | AI가 컴파일러의 일부인 첫 번째 언어**
 
-*데이터 분석 자체가 문법인 언어.*
+> 💻 **"Python/Pandas 생태계가 데이터 사이언스계의 Microsoft Windows라면, 🍏 x1zzLang은 Apple Mac입니다."**
+> 
+> 강력한 코어 엔진(Rust + Polars)과 전용 컴파일러 OS(증분 컴파일 아키텍처)를 하나로 수직 통합했습니다. 복잡한 환경 설정의 스트레스를 완전히 지우고, 데이터 규모에 흔들리지 않는 압도적인 성능을 제공합니다.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Language: .xzz](https://img.shields.io/badge/Language-.xzz-orange.svg)]()
