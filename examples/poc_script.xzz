@@ -30,10 +30,10 @@ v air_filtered = air_raw
   |> count;
 
 
-
+v a = 10;
 
 v air_raw2 = load("examples/seoul_air_2026.csv") :: AirQuality
   |> filter (pm10 > 20)
-  |> filter (pm25 > 10)
+  |> filter (pm25 > a)
   |> select([date, station, pm10, pm25])
   |> count;

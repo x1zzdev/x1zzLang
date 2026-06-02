@@ -1,0 +1,80 @@
+// x1zzLang PoC — v0.16 Full Pipeline
+//
+// 모든 새 런타임 기능을 망라한 종합 예제:
+//   col("x"), true/false, 1_200_000, groupBy, sum, mean, min, max,
+//   orderBy(desc:), take, dropNull, fillNull, Count(col)
+//
+// CSV: 서울시 대기질 (seoul_air_2026.csv)
+//   헤더: 일시, 구분, 미세먼지(PM10), 초미세먼지(PM25)
+//   Dynamic Schema Bridge 가 자동 매핑: date, station, pm10, pm25
+
+// ── 스키마 정의 ───────────────────────────────────────────────────────────────
+type AirQuality = {
+  date: string,
+  station: string,
+  pm10: Option<float>,
+  pm25: Option<float>,
+};
+
+// ── 파이프라인 1: 기본 로드 + select ─────────────────────────────────────────
+// 변수 참조(VarRef), select, count 단독 사용 시연
+v raw = load("examples/seoul_air_2026.csv") :: AirQuality
+  |> select([date, station, pm10, pm25]);
+
+// ── 파이프라인 2: col() + 불리언 + 언더스코어 ─────────────────────────────────
+// README 스타일: col("x") 표현식, true/false 리터럴, 1_200_000 숫자 언더스코어
+// dropNull, filter, count 단독 사용
+v cleaned = raw
+  |> dropNull("pm10")
+  |> filter(col("pm10") < 120)
+  |> filter(col("pm25") > 10);
+
+// ── 파이프라인 3: groupBy + sum/mean/min/max ──────────────────────────────────
+// groupBy 후 다양한 집계 연산 시연
+v by_station = cleaned
+  |> groupBy("station")
+  |> sum("pm10");
+
+// ── 파이프라인 4: mean + orderBy + take ───────────────────────────────────────
+// 집계 + 정렬 + 슬라이싱 조합
+v top10_mean = cleaned
+  |> groupBy("station")
+  |> mean("pm10")
+  |> orderBy("pm10", desc: true)
+  |> take(10);
+
+// ── 파이프라인 5: min + max 비교 ──────────────────────────────────────────────
+// 동일 groupBy 내 min/max 쌍 사용
+v range_by_station = cleaned
+  |> groupBy("station")
+  |> min("pm10");
+
+v extremes = cleaned
+  |> groupBy("station")
+  |> max("pm10");
+
+// ── 파이프라인 6: fillNull 복원 ───────────────────────────────────────────────
+// dropNull로 제거했던 pm25의 null을 0으로 채운 후 groupBy + count
+v filled = raw
+  |> fillNull("pm25", 0)
+  |> filter(col("pm10") > 50)
+  |> groupBy("station")
+  |> count("pm25")
+  |> orderBy("pm25", desc: true)
+  |> take(5);
+
+// ── 파이프라인 7: README 완전 일치 파이프라인 ──────────────────────────────────
+// README.md 에 명시된 7-스텝 파이프라인 그대로 실행
+v blind_spots = raw
+  |> dropNull("pm10")
+  |> filter(col("pm10") < 120)
+  |> filter(col("pm25") > 10)
+  |> groupBy("station")
+  |> count("pm25")
+  |> orderBy("pm25", desc: true)
+  |> take(10);
+
+// ── 파이프라인 8: count("col") 단독 집계 ──────────────────────────────────────
+// groupBy 없이 count("col") 단독 사용 (컬럼 전체 count)
+v total_count = raw
+  |> count("pm10");

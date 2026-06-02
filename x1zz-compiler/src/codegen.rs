@@ -1,19 +1,13 @@
-/// x1zzLang - 코드 생성기 (v0.15)
+/// x1zzLang - 코드 생성기 (v0.16)
 ///
 /// Program AST → Polars LazyFrame 흐름 문자열 생성.
 ///
-/// 출력 예시:
-///   // [Schema] AirQuality
-///   //   station      : string
-///   //   pm10         : Option<float>
-///
-///   // [VarDecl] result = load("examples/seoul_air_2026.csv") :: AirQuality
-///   let result = LazyCsvReader::new("examples/seoul_air_2026.csv")
-///       .finish()?
-///       .filter(col("pm10").gt(lit(50i64)))
-///       .collect()?;
+/// [v0.16 변경사항]
+///   - BoolLit 표현식 지원 (true/false)
+///   - Count(None) / Count(Some(col)) 구분
+///   - 신규 연산자 출력: GroupBy, Sum, Mean, Min, Max, OrderBy, Take, DropNull, FillNull
 
-use crate::ast::{BinOpKind, Expr, PipelineOp, PipelineSource, Program, Stmt};
+use crate::ast::{BinOpKind, Expr, FillNullValue, PipelineOp, PipelineSource, Program, Stmt};
 
 /// 코드 생성기 — 유닛 구조체
 pub struct Codegen;
@@ -116,6 +110,7 @@ impl Codegen {
 
     fn emit_op(op: &PipelineOp) -> String {
         match op {
+            // ── 기존 ──────────────────────────────────────────────────────────
             PipelineOp::Filter(expr) => {
                 format!(
                     "  .filter({})  // |> filter({})",
@@ -134,8 +129,79 @@ impl Codegen {
                     xzz
                 )
             }
-            PipelineOp::Count => {
+            PipelineOp::Count(None) => {
                 "  // |> count  →  df.height() 로 행 수 확인".to_string()
+            }
+            PipelineOp::Count(Some(col)) => {
+                format!(
+                    "  .agg([col(\"{}\").count()])  // |> count(\"{}\")",
+                    col, col
+                )
+            }
+
+            // ── v0.16 집계 ────────────────────────────────────────────────────
+            PipelineOp::GroupBy(group_col) => {
+                format!(
+                    "  .group_by([col(\"{}\")])  // |> groupBy(\"{}\")",
+                    group_col, group_col
+                )
+            }
+            PipelineOp::Sum(agg_col) => {
+                format!(
+                    "  .agg([col(\"{}\").sum()])  // |> sum(\"{}\")",
+                    agg_col, agg_col
+                )
+            }
+            PipelineOp::Mean(agg_col) => {
+                format!(
+                    "  .agg([col(\"{}\").mean()])  // |> mean(\"{}\")",
+                    agg_col, agg_col
+                )
+            }
+            PipelineOp::Min(agg_col) => {
+                format!(
+                    "  .agg([col(\"{}\").min()])  // |> min(\"{}\")",
+                    agg_col, agg_col
+                )
+            }
+            PipelineOp::Max(agg_col) => {
+                format!(
+                    "  .agg([col(\"{}\").max()])  // |> max(\"{}\")",
+                    agg_col, agg_col
+                )
+            }
+
+            // ── v0.16 정렬 / 슬라이싱 ─────────────────────────────────────────
+            PipelineOp::OrderBy { col, desc } => {
+                format!(
+                    "  .sort([\"{}\"], SortMultipleOptions::default().with_order_descending({}))  // |> orderBy(\"{}\", desc: {})",
+                    col, desc, col, desc
+                )
+            }
+            PipelineOp::Take(n) => {
+                format!(
+                    "  .limit({})  // |> take({})",
+                    n, n
+                )
+            }
+
+            // ── v0.16 Null 처리 ────────────────────────────────────────────────
+            PipelineOp::DropNull(drop_col) => {
+                format!(
+                    "  .drop_nulls(Some(vec![col(\"{}\")]))  // |> dropNull(\"{}\")",
+                    drop_col, drop_col
+                )
+            }
+            PipelineOp::FillNull { col, value } => {
+                let lit_str = match value {
+                    FillNullValue::Int(n)   => format!("lit({}i64)", n),
+                    FillNullValue::Float(f) => format!("lit({}f64)", f),
+                    FillNullValue::Str(s)   => format!("lit(\"{}\")", s),
+                };
+                format!(
+                    "  .with_columns([col(\"{}\").fill_null({})])  // |> fillNull(\"{}\", ...)",
+                    col, lit_str, col
+                )
             }
         }
     }
@@ -148,6 +214,7 @@ impl Codegen {
             Expr::StringLit(s) => format!("lit(\"{}\")", s),
             Expr::IntLit(n)    => format!("lit({}i64)", n),
             Expr::FloatLit(f)  => format!("lit({}f64)", f),
+            Expr::BoolLit(b)   => format!("lit({})", b),
             Expr::BinOp { lhs, op, rhs } => {
                 let l = Self::expr_to_polars(lhs);
                 let r = Self::expr_to_polars(rhs);
@@ -171,6 +238,7 @@ impl Codegen {
             Expr::StringLit(s) => format!("\"{}\"", s),
             Expr::IntLit(n)    => n.to_string(),
             Expr::FloatLit(f)  => f.to_string(),
+            Expr::BoolLit(b)   => b.to_string(),
             Expr::BinOp { lhs, op, rhs } => {
                 let op_str = match op {
                     BinOpKind::Eq    => "==",

@@ -78,12 +78,36 @@ pub enum TokenKind {
     Select,
     /// count
     Count,
+    /// groupBy
+    GroupBy,
+    /// sum
+    Sum,
+    /// mean
+    Mean,
+    /// min
+    Min,
+    /// max
+    Max,
+    /// orderBy
+    OrderBy,
+    /// take
+    Take,
+    /// dropNull
+    DropNull,
+    /// fillNull
+    FillNull,
     /// v  (불변 변수 선언)
     V,
     /// mut
     Mut,
     /// Option  (Option<T> 타입 키워드)
     OptionKw,
+    /// true (불리언 리터럴)
+    True,
+    /// false (불리언 리터럴)
+    False,
+    /// desc  (orderBy 내 정렬 방향 키워드)
+    Desc,
 
     // ── 리터럴 / 식별자 ─────────────────────────────
     /// 일반 식별자

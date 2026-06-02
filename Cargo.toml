@@ -7,9 +7,33 @@ members = [
 resolver = "2"
 
 [workspace.package]
-name = "x1zz"
 version = "0.1.0"
 edition = "2024"
 authors = ["Jangseowoo <ax1s.x1zz.com>"]
 license = "Apache-2.0"
 repository = "https://github.com/ax1sofficially-alt/x1zzLang"
+
+[package]
+name = "x1zz"
+version = "0.1.0"
+edition = "2024"
+authors = ["Jangseowoo <ax1s.x1zz.com>"]
+license = "Apache-2.0"
+
+[[bin]]
+name = "x1zz"
+path = "src/main.rs"
+
+[profile.release]
+opt-level     = 3
+lto           = true      # Link-Time Optimization
+codegen-units = 1         # 단일 코드 유닛 = 최대 최적화
+
+[dependencies]
+x1zz-compiler = { path = "x1zz-compiler" }
+clap = { version = "4.4", features = ["derive", "cargo"] }
+tokio = { version = "1.35", features = ["full"] }
+indicatif = { version = "0.17" }
+colored = { version = "2.1" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }

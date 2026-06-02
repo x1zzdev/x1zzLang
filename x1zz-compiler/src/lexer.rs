@@ -5,6 +5,12 @@
 ///   chars   - 상태 머신 이터레이터
 ///   pos     - 현재 바이트 오프셋 (UTF-8 len_utf8 누적)
 ///   line/col- 소스 위치 추적
+///
+/// [v0.16 변경사항]
+///   - 숫자 리터럴 underscore 지원: 1_200_000 → 1200000
+///   - 새 키워드: groupBy, sum, mean, min, max, orderBy, take, dropNull, fillNull
+///   - 불리언 키워드: true, false
+///   - 정렬 방향 키워드: desc
 
 use crate::error::{CompileError, CompileResult, ErrorKind};
 use crate::token::{Span, Token, TokenKind};
@@ -98,21 +104,28 @@ impl<'src> Lexer<'src> {
     // ── 숫자 리터럴 ──────────────────────────────────────────────────────────
 
     /// 첫 번째 자리(first)는 이미 소비된 상태
+    /// underscore(_)를 허용: 1_200_000 → IntLit(1200000)
     fn read_number(&mut self, first: char) -> TokenKind {
         let mut buf = String::new();
         buf.push(first);
 
-        // 정수 부분
-        while self.peek().map_or(false, |c| c.is_ascii_digit()) {
-            buf.push(self.advance().unwrap());
+        // 정수 부분 (underscore 무시)
+        while self.peek().map_or(false, |c| c.is_ascii_digit() || c == '_') {
+            let c = self.advance().unwrap();
+            if c != '_' {
+                buf.push(c);
+            }
         }
 
         // 소수점 + 소수 부분
         if self.peek() == Some('.') {
             self.advance();   // '.' 소비
             buf.push('.');
-            while self.peek().map_or(false, |c| c.is_ascii_digit()) {
-                buf.push(self.advance().unwrap());
+            while self.peek().map_or(false, |c| c.is_ascii_digit() || c == '_') {
+                let c = self.advance().unwrap();
+                if c != '_' {
+                    buf.push(c);
+                }
             }
             return TokenKind::FloatLit(buf.parse().unwrap_or(0.0));
         }
@@ -133,15 +146,31 @@ impl<'src> Lexer<'src> {
 
     fn keyword_or_ident(s: String) -> TokenKind {
         match s.as_str() {
-            "type"   => TokenKind::Type,
-            "load"   => TokenKind::Load,
-            "filter" => TokenKind::Filter,
-            "select" => TokenKind::Select,
-            "count"  => TokenKind::Count,
-            "v"      => TokenKind::V,
-            "mut"    => TokenKind::Mut,
-            "Option" => TokenKind::OptionKw,
-            _        => TokenKind::Ident(s),
+            // ── 기존 키워드 ──────────────────────────────────
+            "type"     => TokenKind::Type,
+            "load"     => TokenKind::Load,
+            "filter"   => TokenKind::Filter,
+            "select"   => TokenKind::Select,
+            "count"    => TokenKind::Count,
+            "v"        => TokenKind::V,
+            "mut"      => TokenKind::Mut,
+            "Option"   => TokenKind::OptionKw,
+            // ── v0.16 신규 파이프라인 연산 키워드 ────────────
+            "groupBy"  => TokenKind::GroupBy,
+            "sum"      => TokenKind::Sum,
+            "mean"     => TokenKind::Mean,
+            "min"      => TokenKind::Min,
+            "max"      => TokenKind::Max,
+            "orderBy"  => TokenKind::OrderBy,
+            "take"     => TokenKind::Take,
+            "dropNull" => TokenKind::DropNull,
+            "fillNull" => TokenKind::FillNull,
+            // ── v0.16 리터럴 / 명명 인수 키워드 ─────────────
+            "true"     => TokenKind::True,
+            "false"    => TokenKind::False,
+            "desc"     => TokenKind::Desc,
+            // ── 식별자 ───────────────────────────────────────
+            _          => TokenKind::Ident(s),
         }
     }
 
@@ -372,5 +401,47 @@ mod tests {
         assert!(result.is_err(), "@ 문자는 에러여야 함");
         let err = result.unwrap_err();
         assert!(matches!(err.kind, crate::error::ErrorKind::UnexpectedChar('@')));
+    }
+
+    // ── 테스트 9 (v0.16): 신규 파이프라인 키워드 토크나이징 ──────────────────
+    #[test]
+    fn test_new_pipeline_keywords() {
+        let src = "groupBy sum mean min max orderBy take dropNull fillNull";
+        let kinds = tokenize(src);
+        assert!(kinds.contains(&TokenKind::GroupBy),  "GroupBy 없음");
+        assert!(kinds.contains(&TokenKind::Sum),      "Sum 없음");
+        assert!(kinds.contains(&TokenKind::Mean),     "Mean 없음");
+        assert!(kinds.contains(&TokenKind::Min),      "Min 없음");
+        assert!(kinds.contains(&TokenKind::Max),      "Max 없음");
+        assert!(kinds.contains(&TokenKind::OrderBy),  "OrderBy 없음");
+        assert!(kinds.contains(&TokenKind::Take),     "Take 없음");
+        assert!(kinds.contains(&TokenKind::DropNull), "DropNull 없음");
+        assert!(kinds.contains(&TokenKind::FillNull), "FillNull 없음");
+    }
+
+    // ── 테스트 10 (v0.16): 불리언 키워드 ────────────────────────────────────
+    #[test]
+    fn test_boolean_keywords() {
+        let kinds = tokenize("true false");
+        assert!(kinds.contains(&TokenKind::True),  "True 없음");
+        assert!(kinds.contains(&TokenKind::False), "False 없음");
+    }
+
+    // ── 테스트 11 (v0.16): 숫자 underscore ──────────────────────────────────
+    #[test]
+    fn test_number_underscore() {
+        let kinds = tokenize("1_200_000");
+        assert!(
+            kinds.contains(&TokenKind::IntLit(1_200_000)),
+            "1_200_000 → IntLit(1200000) 변환 실패: {:?}",
+            kinds
+        );
+    }
+
+    // ── 테스트 12 (v0.16): desc 키워드 ──────────────────────────────────────
+    #[test]
+    fn test_desc_keyword() {
+        let kinds = tokenize("desc");
+        assert!(kinds.contains(&TokenKind::Desc), "Desc 없음");
     }
 }
