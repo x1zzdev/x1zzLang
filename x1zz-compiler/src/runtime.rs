@@ -1,4 +1,4 @@
-/// x1zz-compiler/src/runtime.rs — 런타임 실행 엔진 (v0.17)
+/// x1zz-compiler/src/runtime.rs — 런타임 실행 엔진 (v0.18)
 ///
 /// .xzz 소스 파일을 받아 전체 컴파일 파이프라인을 실행하는 라이브러리 모듈.
 ///
@@ -11,15 +11,14 @@
 ///      5-A) TypeRegistry 구축   — TypeDecl 수집 (스키마 정의)
 ///      5-B) VarDecl 순차 실행   — 소스 결정 → Dynamic Bridge → 타입 검증 → Op 적용
 ///      5-C) SymbolTable 저장    — var_name → DataFrame
+///   6. 최종 결과 출력           — last_var 의 DataFrame Top 5 rows
 ///
-/// [v0.17 변경사항]
-///   - 대량 디버그 출력 제거: 토큰 루프, AST dump, DataFrame 전체 행 출력 삭제
-///   - 벤치마크 모드 stdout 버퍼 포화(데드락) 방지를 위해 요약 로그만 출력
-///   - BoolLit 지원 (to_polars_expr)
-///   - Count(None) / Count(Some(col)) 처리 분리
-///   - pending_group_by 패턴: GroupBy + [Sum/Mean/Min/Max/Count(Some)] 쌍 처리
-///   - OrderBy → sort(), Take → limit(), DropNull → drop_nulls(), FillNull → with_columns() 구현
-///   - SortMultipleOptions 정렬 옵션 적용
+/// [v0.18 변경사항]
+///   - run_pipeline 에 verbose: bool 파라미터 추가
+///   - verbose=true 시 Lexer 토큰 스트림 출력 (STEP 1)
+///   - verbose=true 시 AST 전체 출력 (STEP 2)
+///   - 실행 완료 후 마지막 VarDecl 변수의 DataFrame Top 5 자동 출력
+///   - Panic-Free: unwrap/expect 제거, match/if let/?  사용
 
 use std::collections::HashMap;
 use std::fs;
@@ -32,7 +31,9 @@ use crate::{BinOpKind, Codegen, Expr, Lexer, Parser, StructField};
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// .xzz 소스 파일 경로를 받아 전체 컴파일+런타임 파이프라인을 실행한다.
-pub fn run_pipeline(source_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+///
+/// - `verbose`: true 이면 Lexer 토큰 스트림과 AST 를 stdout 에 출력한다.
+pub fn run_pipeline(source_path: &str, verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
     // ── STEP 1: 소스 파일 읽기 ───────────────────────────────────────────────
     let source = fs::read_to_string(source_path)
         .map_err(|e| format!("IO 에러: 파일 읽기 실패 '{}' — {}", source_path, e))?;
@@ -47,6 +48,17 @@ pub fn run_pipeline(source_path: &str) -> Result<(), Box<dyn std::error::Error>>
 
     eprintln!("[x1zz] Lexer 완료: {} 토큰", tokens.len());
 
+    // ── Verbose STEP 1: 토큰 스트림 출력 ─────────────────────────────────────
+    if verbose {
+        println!();
+        println!("⚡ STEP 1. Tokenized Stream (Lexer)");
+        println!("{}", "─".repeat(60));
+        for token in &tokens {
+            println!("  [{:>4}:{:<3}] {:?}", token.span.line, token.span.col, token.kind);
+        }
+        println!();
+    }
+
     // ── STEP 3: Parser — AST 구축 ───────────────────────────────────────────
     let mut parser = Parser::new(tokens);
     let program = parser
@@ -54,6 +66,17 @@ pub fn run_pipeline(source_path: &str) -> Result<(), Box<dyn std::error::Error>>
         .map_err(|e| format!("[x1zz PARSER ERROR] {}", e))?;
 
     eprintln!("[x1zz] Parser 완료: {} AST 노드", program.stmts.len());
+
+    // ── Verbose STEP 2: AST 출력 ──────────────────────────────────────────────
+    if verbose {
+        println!();
+        println!("⚡ STEP 2. Abstract Syntax Tree (Parser)");
+        println!("{}", "─".repeat(60));
+        for (i, stmt) in program.stmts.iter().enumerate() {
+            println!("  [{}] {:#?}", i, stmt);
+        }
+        println!();
+    }
 
     // ── STEP 4: Codegen — Polars 흐름 매핑 문자열 생성 ──────────────────────
     let _codegen_output = Codegen::generate(&program);
@@ -71,6 +94,7 @@ pub fn run_pipeline(source_path: &str) -> Result<(), Box<dyn std::error::Error>>
     // 5-B: VarDecl 순차 실행 + SymbolTable 관리
     let mut symbol_table: HashMap<String, polars::frame::DataFrame> = HashMap::new();
     let mut pipeline_count = 0usize;
+    let mut last_var_name: Option<String> = None;
 
     for stmt in &program.stmts {
         if let Stmt::VarDecl {
@@ -91,6 +115,7 @@ pub fn run_pipeline(source_path: &str) -> Result<(), Box<dyn std::error::Error>>
                         df.height(),
                         df.width()
                     );
+                    last_var_name = Some(var_name.clone());
                     symbol_table.insert(var_name.clone(), df);
                 }
                 Err(e) => {
@@ -109,6 +134,22 @@ pub fn run_pipeline(source_path: &str) -> Result<(), Box<dyn std::error::Error>>
         type_registry.len(),
         pipeline_count
     );
+
+    // ── STEP 6: 최종 DataFrame 자동 출력 (Top 5) ────────────────────────────
+    if let Some(ref name) = last_var_name {
+        if let Some(df) = symbol_table.get(name) {
+            let row_count = df.height().min(5);
+            // head() 는 clone 후 슬라이싱: Panic-Free
+            let top5 = df.head(Some(row_count));
+            println!();
+            println!(
+                "📊 [x1zz Execution Result: '{}' (Top {} Rows)]",
+                name, row_count
+            );
+            println!("{}", "─".repeat(60));
+            println!("{}", top5);
+        }
+    }
 
     Ok(())
 }

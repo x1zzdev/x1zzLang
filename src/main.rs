@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match cli.command {
         // ── run: .xzz 데이터 분석 코드 실행 ────────────────────────────────
         //   Lexer → Parser → TypeChecker → Runtime (Polars LazyFrame 체인)
-        Commands::Run { file, release } => {
+        Commands::Run { file, release, verbose } => {
             let source_path = match file.to_str() {
                 Some(p) => p.to_owned(),
                 None => {
@@ -43,7 +43,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             // x1zz-compiler 런타임 파이프라인 호출
-            if let Err(e) = x1zz_compiler::runtime::run_pipeline(&source_path) {
+            // ⚠ run_pipeline 은 Polars collect() 등 블로킹 작업을 포함하므로
+            //   Tokio 비동기 컨텍스트 내부에서 직접 호출하면 "Cannot start a runtime
+            //   from within a runtime" 패닉이 발생한다.
+            //   → spawn_blocking 으로 Tokio 전용 블로킹 스레드 풀에서 실행한다.
+            // spawn_blocking 반환타입은 Send 를 요구하므로
+            // Box<dyn Error> 대신 에러를 String 으로 변환해서 반환한다.
+            let result = tokio::task::spawn_blocking(move || {
+                x1zz_compiler::runtime::run_pipeline(&source_path, verbose)
+                    .map_err(|e| e.to_string())
+            })
+            .await
+            .unwrap_or_else(|e| Err(format!("스레드 패닉: {:?}", e)));
+
+            if let Err(e) = result {
                 eprintln!("{}", e);
                 std::process::exit(1);
             }
@@ -87,10 +100,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                     println!();
 
-                    if let Err(e) = x1zz_compiler::emitter::emit_rust(
-                        &source_path,
-                        out_path.as_deref(),
-                    ) {
+                    // emit_rust 도 파일 I/O + 파싱 블로킹 작업이므로 spawn_blocking 사용
+                    // Box<dyn Error> 는 Send 불가 → String 으로 변환해서 반환
+                    let out_path_owned = out_path.clone();
+                    let source_path_owned = source_path.clone();
+                    let emit_result = tokio::task::spawn_blocking(move || {
+                        x1zz_compiler::emitter::emit_rust(
+                            &source_path_owned,
+                            out_path_owned.as_deref(),
+                        )
+                        .map_err(|e| e.to_string())
+                    })
+                    .await
+                    .unwrap_or_else(|e| Err(format!("스레드 패닉: {:?}", e)));
+
+                    if let Err(e) = emit_result {
                         eprintln!("{}", e);
                         std::process::exit(1);
                     }

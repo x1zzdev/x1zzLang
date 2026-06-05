@@ -20,10 +20,13 @@ fn main() {
         .unwrap_or("examples/poc_script.xzz");
 
     // ── CSV 직접 입력 감지: 벤치마크 파이프라인 자동 생성 ───────────────────────
+    // --verbose / -v 플래그 감지
+    let verbose = args.iter().any(|a| a == "--verbose" || a == "-v");
+
     if input_path.to_lowercase().ends_with(".csv") {
-        run_csv_benchmark(input_path);
+        run_csv_benchmark(input_path, verbose);
     } else {
-        if let Err(e) = x1zz_compiler::runtime::run_pipeline(input_path) {
+        if let Err(e) = x1zz_compiler::runtime::run_pipeline(input_path, verbose) {
             eprintln!("{}", e);
             std::process::exit(1);
         }
@@ -32,7 +35,7 @@ fn main() {
 
 /// CSV 경로를 받아 벤치마크용 .xzz 스크립트를 임시 파일로 생성한 뒤
 /// run_pipeline()으로 실행하고 임시 파일을 정리한다.
-fn run_csv_benchmark(csv_path: &str) {
+fn run_csv_benchmark(csv_path: &str, verbose: bool) {
     // 크로스 플랫폼: 백슬래시 → 슬래시
     let posix_path = csv_path.replace('\\', "/");
 
@@ -100,7 +103,7 @@ v filled = raw
         std::process::exit(1);
     }
 
-    let result = x1zz_compiler::runtime::run_pipeline(&tmp_xzz_path);
+    let result = x1zz_compiler::runtime::run_pipeline(&tmp_xzz_path, verbose);
 
     // 임시 파일 정리 (결과와 무관하게 삭제)
     let _ = std::fs::remove_file(&tmp_xzz_path);

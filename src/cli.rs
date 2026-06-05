@@ -26,6 +26,10 @@ pub enum Commands {
         /// 릴리즈 모드 최적화 활성화
         #[arg(short, long)]
         release: bool,
+
+        /// Verbose 모드: Lexer 토큰 스트림 및 AST 출력 활성화
+        #[arg(short, long)]
+        verbose: bool,
     },
 
     /// sLM 기반 정적 상태 분석을 수행합니다 (Neural Query Planner)
