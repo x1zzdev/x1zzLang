@@ -298,6 +298,53 @@ x1zz-compiler
 
 ---
 
+## Release Notes
+
+### v0.17 — Debug & Normalization Pass
+- `BoolLit` support: `col("support") == false` now evaluates correctly in filter conditions
+- pm10 / pm25 Float64 normalization: null-safe cast + `fill_null(0.0)` for Korean public datasets
+- Debug output suppression: benchmark stdout pipe deadlock resolved
+- Full `Lexer → Parser → Runtime` pipeline integrated in `x1zz run`
+
+### v0.16 — Major Execution Layer Update (Runtime Completion Sprint)
+A comprehensive sprint that implemented the full set of pipeline operators required to execute the README example pipeline end-to-end.
+
+**New Pipeline Operators (9 additions)**
+
+| Operator | Syntax | Polars Equivalent |
+|----------|--------|-------------------|
+| `groupBy` | `\|> groupBy("col")` | `.group_by(["col"])` |
+| `sum` | `\|> sum("col")` | `.agg([col("col").sum()])` |
+| `mean` | `\|> mean("col")` | `.agg([col("col").mean()])` |
+| `min` | `\|> min("col")` | `.agg([col("col").min()])` |
+| `max` | `\|> max("col")` | `.agg([col("col").max()])` |
+| `orderBy` | `\|> orderBy("col", desc: true)` | `.sort(...)` |
+| `take` | `\|> take(10)` | `.limit(10)` |
+| `dropNull` | `\|> dropNull("col")` | `.filter(col.is_not_null())` |
+| `fillNull` | `\|> fillNull("col", 0)` | `.with_columns([col.fill_null(lit(0))])` |
+
+**Language additions**
+- `col("x")` syntax in filter expressions
+- `true` / `false` boolean literals
+- Numeric underscore separators (`1_200_000`)
+
+**Runtime: pending_group_by pattern**  
+`groupBy` stores the column in a deferred slot; the following aggregation op (`sum`, `mean`, `min`, `max`, `count`) consumes it to emit a single `.group_by([...]).agg([...])` chain.
+
+**Tests: 25 / 25 passed**
+
+### v0.16 — Benchmark Suite
+Production-grade benchmark orchestrator (`benches/run_benchmark.py`) with:
+- 6 real-world EUC-KR Seoul air quality CSV files merged into 3 UTF-8 scale datasets (Small ≈ 2M rows, Medium ≈ 15M rows, Large ≈ 30M rows) via 10× statistical augmentation
+- Wall-clock latency + RSS memory profiling at 3 ms sampling intervals
+- Academic whitepaper-style HTML report with Chart.js visualisations (`benches/benchmark_report.html`)
+- Comparison pipeline: `dropNull → filter → groupBy → sum → mean → orderBy → take` (identical logic across both engines)
+
+### v0.16 — Visual IDE
+x1zzLang Visual IDE successfully developed — providing a graphical editing and execution environment for `.xzz` pipelines.
+
+---
+
 ## Current Status
 
 | Component | Status |
@@ -308,9 +355,16 @@ x1zz-compiler
 | Rust Transpiler (codegen) | Implemented |
 | Pipeline Operator (`\|>`) | Implemented |
 | Safe-Load (`::`) | Implemented |
+| GroupBy / Agg Operators (sum, mean, min, max, count) | Implemented (v0.16) |
+| OrderBy / Take / DropNull / FillNull | Implemented (v0.16) |
+| BoolLit & col() expression support | Implemented (v0.17) |
 | SDE (Synthetic Data Engine) | Implemented |
 | NQP State Prediction (PoC) | Implemented (dryrun) |
+| Benchmark Suite (Pandas vs. x1zzLang) | Implemented (v0.16) |
+| Visual IDE | Implemented (v0.16) |
 | Polars LazyFrame integration | In Progress |
+| Incremental Compilation | Planned (Phase 2) |
+| NQP Model Training | Planned (Phase 3) |
 | MCP Server | Phase 4 |
 
 ---

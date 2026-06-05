@@ -298,6 +298,53 @@ x1zz-compiler
 
 ---
 
+## 릴리스 노트
+
+### v0.17 — 디버그 억제 & 정규화 패치
+- `BoolLit` 지원: `col("support") == false` 등 필터 조건식 정상 평가
+- pm10 / pm25 Float64 정규화: null-safe Cast + `fill_null(0.0)` (한국 공공 데이터 호환)
+- 디버그 출력 억제: 벤치마크 stdout 파이프 데드락 해결
+- `Lexer → Parser → Runtime` 전체 파이프라인을 `x1zz run`에 통합
+
+### v0.16 — 실행 레이어 대규모 업데이트 (Runtime Completion Sprint)
+README 예시 파이프라인을 처음부터 끝까지 실행하는 데 필요한 파이프라인 연산자 전체를 구현한 대규모 스프린트.
+
+**신규 파이프라인 연산자 (9종 추가)**
+
+| 연산자 | 문법 | Polars 대응 |
+|--------|------|-------------|
+| `groupBy` | `\|> groupBy("col")` | `.group_by(["col"])` |
+| `sum` | `\|> sum("col")` | `.agg([col("col").sum()])` |
+| `mean` | `\|> mean("col")` | `.agg([col("col").mean()])` |
+| `min` | `\|> min("col")` | `.agg([col("col").min()])` |
+| `max` | `\|> max("col")` | `.agg([col("col").max()])` |
+| `orderBy` | `\|> orderBy("col", desc: true)` | `.sort(...)` |
+| `take` | `\|> take(10)` | `.limit(10)` |
+| `dropNull` | `\|> dropNull("col")` | `.filter(col.is_not_null())` |
+| `fillNull` | `\|> fillNull("col", 0)` | `.with_columns([col.fill_null(lit(0))])` |
+
+**언어 추가사항**
+- 필터 조건식 내 `col("x")` 구문 지원
+- `true` / `false` 불리언 리터럴
+- 숫자 언더스코어 구분자 (`1_200_000`)
+
+**런타임: pending_group_by 패턴**  
+`groupBy`는 컬럼명을 지연 슬롯에 저장하고, 뒤따르는 집계 연산(`sum`, `mean`, `min`, `max`, `count`)에서 소비하여 단일 `.group_by([...]).agg([...])` 체인으로 실행.
+
+**테스트: 25 / 25 통과**
+
+### v0.16 — 벤치마크 스위트
+`benches/run_benchmark.py` — 프로덕션급 벤치마크 오케스트레이터:
+- 6개 실제 EUC-KR 서울 대기질 CSV 파일을 10× 통계적 증강을 통해 3개 UTF-8 스케일 데이터셋으로 생성 (Small ≈ 2M 행, Medium ≈ 15M 행, Large ≈ 30M 행)
+- 3ms 간격 RSS 메모리 샘플링 + 벽시계 레이턴시 측정
+- Chart.js 시각화를 포함한 학술 논문 스타일 HTML 리포트 (`benches/benchmark_report.html`)
+- 비교 파이프라인: `dropNull → filter → groupBy → sum → mean → orderBy → take` (양 엔진 동일 로직 적용)
+
+### v0.16 — Visual IDE
+x1zzLang Visual IDE 개발 성공 — `.xzz` 파이프라인을 위한 그래픽 편집 및 실행 환경 제공.
+
+---
+
 ## Current Status
 
 | Component | Status |
@@ -308,9 +355,16 @@ x1zz-compiler
 | Rust Transpiler (codegen) | 구현 완료 |
 | Pipeline Operator (`\|>`) | 구현 완료 |
 | Safe-Load (`::`) | 구현 완료 |
+| GroupBy / 집계 연산자 (sum, mean, min, max, count) | 구현 완료 (v0.16) |
+| OrderBy / Take / DropNull / FillNull | 구현 완료 (v0.16) |
+| BoolLit & col() 표현식 지원 | 구현 완료 (v0.17) |
 | SDE (Synthetic Data Engine) | 구현 완료 |
 | NQP State Prediction (PoC) | 구현 완료 (dryrun) |
-| Polars LazyFrame 연동 | 진행 중 |
+| 벤치마크 스위트 (Pandas vs. x1zzLang) | 구현 완료 (v0.16) |
+| Visual IDE | 구현 완료 (v0.16) |
+| Polars LazyFrame 완전 연동 | 진행 중 |
+| 증분 컴파일 | 예정 (Phase 2) |
+| NQP 모델 학습 | 예정 (Phase 3) |
 | MCP 서버 | Phase 4 |
 
 ---

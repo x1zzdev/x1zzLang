@@ -8,4 +8,6 @@
 
 x1zz-sde
 
+benches/data/*.csv
+
 @x1zzLang_MVP_Roadmap_v3.docx
