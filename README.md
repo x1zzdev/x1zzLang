@@ -11,11 +11,11 @@
 
 # x1zzLang
 
-**Scripting on the surface. Compiled at its core. | The first language where AI is part of the compiler.**
+**Scripting on the surface. Compiled at its core. | AI-Augmented Data Pipeline Language**
 
 ![x1zzLang Benchmark](benches/x1zzLang_benchmark.png)
 
-> **Performance Snapshot:** On a 3.4 million-row workload, `x1zzLang` achieves a **3.84× speedup** over Pandas by compiling data pipelines into optimized Polars LazyFrame execution plans with automatic parallelization. *(For a visual workflow interface, see the [x1zzETL Visual IDE](https://github.com/x1zzdev/x1zzLang-visual-ide).)*
+> > **Performance Snapshot:** On our benchmarked 3.4 million-row workload, `x1zzLang` achieved a **3.84× speedup** over an equivalent Pandas pipeline by compiling data pipelines into optimized Polars LazyFrame execution plans with automatic parallelization. *(For a visual workflow interface, see the [x1zzETL Visual IDE](https://github.com/x1zzdev/x1zzLang-visual-ide).)*
 
 
 > 💻 **"If Python/Pandas is the Microsoft Windows of data science, 🍏 x1zzLang is the Apple Mac."** 
@@ -107,7 +107,7 @@ v result = data
 
 ---
 
-### 2. AI-Augmented Compilation — Neural Query Planner (NQP)
+### 2. Experimental AI-Augmented Compilation — Neural Query Planner (NQP)
 
 > *"If GitHub Copilot completes code, x1zz-Copilot is part of the compiler that understands execution."*
 
@@ -150,7 +150,7 @@ They allow users to validate pipeline logic before committing to a full run.
 
 > *"The moment data is loaded, it is already validated."*
 
-The `::` Safe-Load operator and compile-time type inference eliminate an entire class of runtime errors.
+The `::` Safe-Load operator and schema-aware type inference eliminate an entire class of runtime errors before execution.
 
 ```xzz
 // Declare the schema first.
@@ -162,7 +162,7 @@ type SalesSchema = {
   discount: Option<float>,   // nullable — some records have no discount
 }
 
-// :: verifies column presence and type compatibility at compile time.
+// :: verifies column presence and schema compatibility before execution.
 v data = load("sales_2026.csv") :: SalesSchema
 ```
 

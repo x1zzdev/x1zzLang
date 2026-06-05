@@ -11,7 +11,7 @@
 
 # x1zzLang
 
-**겉은 스크립트, 속은 컴파일 | AI가 컴파일러의 일부인 첫 번째 언어**
+**겉은 스크립트, 속은 컴파일 | AI-Augmented Data Pipeline Language**
 
 ![x1zzLang Benchmark](benches/x1zzLang_benchmark.png)
 
@@ -105,7 +105,7 @@ v result = data
 
 ---
 
-### 2. AI-Augmented Compilation — Neural Query Planner (NQP)
+### 2. Experimental AI-Augmented Compilation — Neural Query Planner (NQP)
 
 > *"GitHub Copilot이 코드를 완성하는 도구라면,  
 > x1zz-Copilot은 실행 결과를 이해하는 컴파일러의 일부다."*
@@ -149,7 +149,7 @@ $ x1zz run welfare_analysis.xzz --predict
 
 > *"데이터를 불러오는 순간, 이미 검증된 상태다."*
 
-`::` Safe-Load 연산자와 컴파일 타임 타입 추론으로 런타임 오류를 원천 차단한다.
+`::` Safe-Load 연산자와 스키마 기반 타입 추론으로 런타임 오류를 원천 차단한다.
 
 ```xzz
 // 스키마를 먼저 선언한다.
@@ -161,7 +161,7 @@ type SalesSchema = {
   discount: Option<float>,   // nullable — 할인 없는 경우 존재
 }
 
-// :: 연산자가 컬럼 존재 여부와 타입 일치를 컴파일 시점에 검증한다.
+// :: 연산자가 컬럼 존재 여부와 스키마 호환성을 실행 전에 검증한다.
 v data = load("sales_2026.csv") :: SalesSchema
 ```
 
