@@ -13,7 +13,7 @@
 
 **Scripting on the surface. Compiled at its core. | AI-Augmented Data Pipeline Language**
 
-![x1zzLang Benchmark](benches/x1zzLang_benchmark.png)
+![x1zzLang Benchmark](benches/x1zzLang_benchmark2.png)
 
 > > **Performance Snapshot:** On our benchmarked 3.4 million-row workload, `x1zzLang` achieved a **3.84× speedup** over an equivalent Pandas pipeline by compiling data pipelines into optimized Polars LazyFrame execution plans with automatic parallelization. *(For a visual workflow interface, see the [x1zzETL Visual IDE](https://github.com/x1zzdev/x1zzLang-visual-ide).)*
 

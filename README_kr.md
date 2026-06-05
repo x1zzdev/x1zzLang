@@ -13,7 +13,7 @@
 
 **겉은 스크립트, 속은 컴파일 | AI-Augmented Data Pipeline Language**
 
-![x1zzLang Benchmark](benches/x1zzLang_benchmark.png)
+![x1zzLang Benchmark](benches/x1zzLang_benchmark2.png)
 
 > **성능 스냅샷(Performance Snapshot):** `x1zzLang`은 340만 행의 워크로드 연산에서 데이터 파이프라인을 자동 병렬화가 내장된 최적화 Polars LazyFrame 실행 계획으로 컴파일함으로써, Pandas 대비 **3.84배의 속도 향상**을 달성합니다. *(시각적 워크플로우 인터페이스를 찾으시나요? [x1zzETL Visual IDE](https://github.com/x1zzdev/x1zzLang-visual-ide)를 확인해 보세요!)*
 

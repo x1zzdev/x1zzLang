@@ -269,8 +269,8 @@
     air-quality measurement files.  All pipeline stages are identical across
     engines.  At the Large scale x1zzLang achieves a
     <strong>3.84&times;</strong> speedup
-    and a <strong>3308&nbsp;MB</strong> reduction in
-    peak resident-set memory relative to Pandas.
+    with a peak RSS of <strong>5,417&nbsp;MB</strong>
+    (+3,308&nbsp;MB vs. Pandas, multi-threaded trade-off).
   </div>
 
   <!-- ══ Source Code ════════════════════════════════════════════════════ -->
@@ -456,11 +456,11 @@ print(json.dumps(result))</code></pre>
       </div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">Memory Reduction</div>
-      <div class="metric-value">3308&nbsp;MB</div>
+      <div class="metric-label">Peak RSS Memory</div>
+      <div class="metric-value">5,417&nbsp;MB</div>
       <div class="metric-sub">
-        x1zzLang 5417.2&nbsp;MB vs.
-        Pandas 2109.5&nbsp;MB
+        x1zzLang 5417.2&nbsp;MB vs. Pandas 2109.5&nbsp;MB<br>
+        <span style="font-size:10.5px;color:#94a3b8;font-style:italic">(Multi-threaded Trade-off)</span>
       </div>
     </div>
     <div class="metric-card">
