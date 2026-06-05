@@ -13,6 +13,10 @@
 
 **겉은 스크립트, 속은 컴파일 | AI가 컴파일러의 일부인 첫 번째 언어**
 
+![x1zzLang Benchmark](benches/x1zzLang_benchmark.png)
+
+> **성능 스냅샷(Performance Snapshot):** `x1zzLang`은 340만 행의 워크로드 연산에서 데이터 파이프라인을 자동 병렬화가 내장된 최적화 Polars LazyFrame 실행 계획으로 컴파일함으로써, Pandas 대비 **3.84배의 속도 향상**을 달성합니다. *(시각적 워크플로우 인터페이스를 찾으시나요? [x1zzETL Visual IDE](https://github.com/x1zzdev/x1zzLang-visual-ide)를 확인해 보세요!)*
+
 > 💻 **"Python/Pandas 생태계가 데이터 사이언스계의 Microsoft Windows라면, 🍏 x1zzLang은 Apple Mac입니다."**
 > 
 > 강력한 코어 엔진(Rust + Polars)과 전용 컴파일러 OS(증분 컴파일 아키텍처)를 하나로 수직 통합했습니다. 복잡한 환경 설정의 스트레스를 완전히 지우고, 데이터 규모에 흔들리지 않는 압도적인 성능을 제공합니다.

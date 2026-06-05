@@ -13,6 +13,11 @@
 
 **Scripting on the surface. Compiled at its core. | The first language where AI is part of the compiler.**
 
+![x1zzLang Benchmark](benches/x1zzLang_benchmark.png)
+
+> **Performance Snapshot:** On a 3.4 million-row workload, `x1zzLang` achieves a **3.84× speedup** over Pandas by compiling data pipelines into optimized Polars LazyFrame execution plans with automatic parallelization. *(For a visual workflow interface, see the [x1zzETL Visual IDE](https://github.com/x1zzdev/x1zzLang-visual-ide).)*
+
+
 > 💻 **"If Python/Pandas is the Microsoft Windows of data science, 🍏 x1zzLang is the Apple Mac."** 
 >
 > We tightly integrate the ultimate engine (Rust + Polars) with a custom compiler OS (Incremental Architecture) to eliminate environment friction and deliver predictable, raw performance.

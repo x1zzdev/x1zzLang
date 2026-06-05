@@ -1,0 +1,39 @@
+// benches/benchmark_pipeline.xzz — x1zzLang Benchmark Pipeline
+// ================================================================
+// Declarative pipeline used during benchmarking (P2 → P7).
+// The x1zz-compiler compiles this to Rust / Polars LazyFrame code
+// at runtime; execution is fully lazy until the terminal `.collect()`.
+//
+// Schema: AirQuality { date: Str, station: Str, pm10: F64, pm25: F64 }
+// Input : scale_<size>.csv  (UTF-8, English headers after normalisation)
+
+// ── P2: Cleaned ──────────────────────────────────────────────────────────────
+// Drop rows where pm10 is null, then apply a dual-column predicate filter.
+v p2 = load("scale_large.csv") :: AirQuality
+  |> dropNull("pm10")
+  |> filter(pm10 < 120 & pm25 > 10);
+
+// ── P3: By Station ───────────────────────────────────────────────────────────
+// Group the cleaned dataset by monitoring station and sum pm10 readings.
+v p3 = p2
+  |> groupBy("station")
+  |> sum("pm10");
+
+// ── P4: Top-10 Mean ──────────────────────────────────────────────────────────
+// Compute per-station mean pm10, sort descending, retain top 10 stations.
+v p4 = p2
+  |> groupBy("station")
+  |> mean("pm10")
+  |> orderBy(desc: true)
+  |> take(10);
+
+// ── P7: Filled ───────────────────────────────────────────────────────────────
+// Start from the raw frame; fill missing pm25 values with 0, restrict to
+// rows where pm10 > 50, then rank stations by pm25 observation count (top 5).
+v p7 = load("scale_large.csv") :: AirQuality
+  |> fillNull("pm25", 0)
+  |> filter(pm10 > 50)
+  |> groupBy("station")
+  |> count("pm25")
+  |> orderBy(desc: true)
+  |> take(5);
