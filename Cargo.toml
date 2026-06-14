@@ -3,6 +3,7 @@
 members = [
     "x1zz-compiler",
     "x1zz-sde",
+    "x1zz-server",
 ]
 resolver = "2"
 

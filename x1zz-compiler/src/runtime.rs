@@ -51,7 +51,7 @@ use crate::{BinOpKind, Codegen, Expr, Lexer, Parser, StructField};
 /// ```
 #[derive(Debug, Serialize)]
 pub struct ChartSpec {
-    #[serde(rename = "type")]
+    #[serde(rename = "chartType")]
     pub chart_type: String,
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -323,6 +323,29 @@ pub fn run_pipeline(source_path: &str, verbose: bool) -> Result<(), Box<dyn std:
             );
             println!("{}", "─".repeat(60));
             println!("{}", top5);
+
+            // ── [x1zz:result] JSON 마커 (x1zz-server API 가 stdout 에서 파싱) ──
+            let api_limit = df.height().min(500);
+            let api_df = df.head(Some(api_limit));
+            let api_rows = df_to_json_array(&api_df)
+                .unwrap_or(serde_json::Value::Array(vec![]));
+            let api_schema: Vec<serde_json::Value> = df
+                .get_column_names()
+                .iter()
+                .map(|n| {
+                    let dtype_str = df
+                        .column(n)
+                        .map(|s| format!("{}", s.dtype()))
+                        .unwrap_or_default();
+                    serde_json::json!({ "name": n.to_string(), "type": dtype_str })
+                })
+                .collect();
+            let result_json =
+                serde_json::json!({ "rows": api_rows, "schema": api_schema });
+            println!(
+                "[x1zz:result] {}",
+                serde_json::to_string(&result_json).unwrap_or_default()
+            );
         }
     }
 
@@ -750,9 +773,9 @@ fn execute_var_decl(
                 // 현재까지의 파이프라인을 collect
                 let snapshot = lf.clone().collect()?;
                 let spec = build_chart_spec(config, &snapshot)?;
-                let json_str = serde_json::to_string_pretty(&spec)?;
-                // [x1zz:chart] 마커로 프론트엔드가 파싱 가능하게 출력
-                println!("[x1zz:chart] {}", json_str);
+                // [x1zz:chart] 마커로 프론트엔드가 파싱 가능하게 출력 (두 줄: 마커 + compact JSON)
+                println!("[x1zz:chart]");
+                println!("{}", serde_json::to_string(&spec)?);
 
                 // ── HTML 차트 파일 생성 + 브라우저 열기 ──────────────────────
                 // var_name에 포함된 파일명 불가 문자(<, >, #, 공백, :, *, ? 등)를 '_'로 치환
