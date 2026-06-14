@@ -1,0 +1,18 @@
+// x1zzLang Visualization Example — Scatter Chart
+// 공부시간과 성적의 상관관계를 산점도로 시각화
+
+type StudentData = {
+    study_hours: float,
+    score: float,
+    name: string,
+}
+
+v by_score = load("students.csv") :: StudentData
+    |> dropNull("study_hours")
+    |> dropNull("score")
+    |> chart {
+        type: scatter
+        x: study_hours
+        y: score
+        title: "공부시간과 성적"
+    };

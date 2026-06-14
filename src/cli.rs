@@ -19,6 +19,7 @@ pub enum Commands {
     /// x1zz 데이터 분석 코드를 실행합니다
     ///
     /// 예: x1zz run examples/poc_script.xzz
+    /// 예: x1zz run examples/poc_script.xzz --predict
     Run {
         /// 실행할 .xzz 소스 파일 경로
         file: PathBuf,
@@ -30,6 +31,11 @@ pub enum Commands {
         /// Verbose 모드: Lexer 토큰 스트림 및 AST 출력 활성화
         #[arg(short, long)]
         verbose: bool,
+
+        /// NQP (Neural Query Planner) 시맨틱 실행 예측 모드
+        /// — 코드를 실행하지 않고 NQP 모델을 통해 예측 결과를 반환합니다
+        #[arg(long)]
+        predict: bool,
     },
 
     /// sLM 기반 정적 상태 분석을 수행합니다 (Neural Query Planner)
@@ -66,5 +72,21 @@ pub enum Commands {
         /// 출력 파일 경로
         #[arg(long, default_value = "data/pairs/pairs.jsonl")]
         output: PathBuf,
+    },
+
+    /// 새 x1zzLang 프로젝트를 생성합니다
+    ///
+    /// 예: x1zz new my-project
+    New {
+        /// 생성할 프로젝트 이름
+        name: String,
+    },
+
+    /// CSV 파일을 읽어 타입 정의 및 load 문을 main.xzz에 추가합니다
+    ///
+    /// 예: x1zz import data/seoul_air.csv
+    Import {
+        /// 가져올 CSV 파일 경로
+        file: String,
     },
 }

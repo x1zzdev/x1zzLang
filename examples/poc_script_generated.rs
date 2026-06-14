@@ -7,8 +7,8 @@
 //   encoding_rs = "0.8"
 // ═══════════════════════════════════════════════════════════════
 
-use polars::prelude::*;
 use encoding_rs::EUC_KR;
+use polars::prelude::*;
 use std::io::Cursor;
 
 /// EUC-KR(CP949) 자동 감지 CSV 로더
@@ -52,14 +52,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // load("examples/seoul_air_2008_2011.csv") :: AirQuality
     let air_raw = load_csv("examples/seoul_air_2008_2011.csv")? // :: AirQuality
         .lazy()
-        .filter(col("pm10").gt(lit(50i64)))  // |> filter(pm10 > 50)
-        .select([col("date"), col("station"), col("pm10"), col("pm25")])  // |> select([date, station, pm10, pm25])
+        .filter(col("pm10").gt(lit(50i64))) // |> filter(pm10 > 50)
+        .select([col("date"), col("station"), col("pm10"), col("pm25")]) // |> select([date, station, pm10, pm25])
         .collect()?;
     println!("[air_raw]\n{}", air_raw);
 
     // ── Pipeline: v air_filtered ────────────────────────────────────────────
-    let air_filtered = air_raw.clone().lazy()
-        .filter(col("pm25").gt(lit(10i64)))  // |> filter(pm25 > 10)
+    let air_filtered = air_raw
+        .clone()
+        .lazy()
+        .filter(col("pm25").gt(lit(10i64))) // |> filter(pm25 > 10)
         .collect()?;
     println!("[air_filtered] count = {}", air_filtered.height());
 
@@ -67,9 +69,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // load("examples/seoul_air_2026.csv") :: AirQuality
     let air_raw2 = load_csv("examples/seoul_air_2026.csv")? // :: AirQuality
         .lazy()
-        .filter(col("pm10").gt(lit(20i64)))  // |> filter(pm10 > 20)
-        .filter(col("pm25").gt(lit(10i64)))  // |> filter(pm25 > 10)
-        .select([col("date"), col("station"), col("p10"), col("pm25")])  // |> select([date, station, p10, pm25])
+        .filter(col("pm10").gt(lit(20i64))) // |> filter(pm10 > 20)
+        .filter(col("pm25").gt(lit(10i64))) // |> filter(pm25 > 10)
+        .select([col("date"), col("station"), col("p10"), col("pm25")]) // |> select([date, station, p10, pm25])
         .collect()?;
     println!("[air_raw2] count = {}", air_raw2.height());
 

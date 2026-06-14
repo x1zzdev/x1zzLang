@@ -12,7 +12,9 @@
 ///       DropNull → .drop_nulls(Some(vec![...]))
 ///       FillNull → .with_columns([...fill_null(...)])
 ///   - validate_op_columns: 신규 컬럼 인수 연산자 스키마 검증 추가
-
+///   - Join 연산자 코드 생성: .join(..., JoinArgs::new(JoinType::...))
+///   - WithColumn 연산자 코드 생성: .with_columns([expr.alias("name")])
+///   - 산술 연산자 to_typed_polars_expr: add/sub/mul/div
 use std::collections::HashMap;
 use std::fs;
 
@@ -55,7 +57,9 @@ pub fn emit_rust(
             println!("  1) 새 Rust 프로젝트 생성:");
             println!("       cargo new my_analysis && cd my_analysis");
             println!("  2) Cargo.toml 에 의존성 추가:");
-            println!("       polars      = {{ version = \"0.53\", features = [\"lazy\", \"csv\"] }}");
+            println!(
+                "       polars      = {{ version = \"0.53\", features = [\"lazy\", \"csv\"] }}"
+            );
             println!("       encoding_rs = \"0.8\"");
             println!("  3) {} 를 src/main.rs 로 복사 후 실행:", path);
             println!("       cargo run");
@@ -113,9 +117,7 @@ fn generate_rust_src(
         .iter()
         .any(|s| matches!(s, Stmt::TypeDecl { .. }));
     if has_schemas {
-        out.push_str(
-            "    // ── x1zzLang Schema Definitions (참조용 주석) ─────────────────────\n",
-        );
+        out.push_str("    // ── x1zzLang Schema Definitions (참조용 주석) ─────────────────────\n");
         for stmt in &program.stmts {
             if let Stmt::TypeDecl { name, fields } = stmt {
                 out.push_str(&format!("    // type {} = {{\n", name));
@@ -164,7 +166,7 @@ fn generate_rust_src(
             // 스키마 검증
             if !col_types.is_empty() {
                 for op in ops {
-                    validate_op_columns(op, &col_types, source_path)?;
+                    validate_op_columns(op, &col_types, &var_col_types, source_path)?;
                 }
             }
 
@@ -176,7 +178,10 @@ fn generate_rust_src(
 
             // 소스 결정
             match source {
-                PipelineSource::Load { file_path, schema_name } => {
+                PipelineSource::Load {
+                    file_path,
+                    schema_name,
+                } => {
                     out.push_str(&format!(
                         "    // load(\"{}\") :: {}\n",
                         file_path, schema_name
@@ -297,17 +302,17 @@ fn generate_rust_src(
                     }
 
                     // ── 정렬 / 슬라이싱 ────────────────────────────────────────
-                    PipelineOp::OrderBy { col: sort_col, desc } => {
+                    PipelineOp::OrderBy {
+                        col: sort_col,
+                        desc,
+                    } => {
                         out.push_str(&format!(
                             "        .sort([\"{}\"], SortMultipleOptions::default().with_order_descending({}))  // |> orderBy(\"{}\", desc: {})\n",
                             sort_col, desc, sort_col, desc
                         ));
                     }
                     PipelineOp::Take(n) => {
-                        out.push_str(&format!(
-                            "        .limit({})  // |> take({})\n",
-                            n, n
-                        ));
+                        out.push_str(&format!("        .limit({})  // |> take({})\n", n, n));
                     }
 
                     // ── Null 처리 ──────────────────────────────────────────────
@@ -317,15 +322,102 @@ fn generate_rust_src(
                             drop_col, drop_col
                         ));
                     }
-                    PipelineOp::FillNull { col: fill_col, value } => {
+                    PipelineOp::FillNull {
+                        col: fill_col,
+                        value,
+                    } => {
                         let lit_str = match value {
-                            FillNullValue::Int(n)   => format!("lit({}i64)", n),
+                            FillNullValue::Int(n) => format!("lit({}i64)", n),
                             FillNullValue::Float(f) => format!("lit({}f64)", f),
-                            FillNullValue::Str(s)   => format!("lit(\"{}\")", s),
+                            FillNullValue::Str(s) => format!("lit(\"{}\")", s),
                         };
                         out.push_str(&format!(
                             "        .with_columns([col(\"{}\").fill_null({})])  // |> fillNull(\"{}\", ...)\n",
                             fill_col, lit_str, fill_col
+                        ));
+                    }
+
+                    // ── v0.16+ / v0.21 Join ────────────────────────────────────
+                    PipelineOp::Join {
+                        other,
+                        left_on,
+                        right_on,
+                        how,
+                    } => {
+                        let left_cols: Vec<String> =
+                            left_on.iter().map(|k| format!("col(\"{}\")", k)).collect();
+                        let right_cols: Vec<String> =
+                            right_on.iter().map(|k| format!("col(\"{}\")", k)).collect();
+                        out.push_str(&format!(
+                            "        .join(\n            {}.clone().lazy(),\n            [{}],\n            [{}],\n            JoinArgs::new({}),\n        )  // |> join({}, left_on: {:?}, right_on: {:?})\n",
+                            other,
+                            left_cols.join(", "),
+                            right_cols.join(", "),
+                            how.as_polars_str(),
+                            other,
+                            left_on,
+                            right_on
+                        ));
+                    }
+
+                    // ── v0.16+ WithColumn ──────────────────────────────────────
+                    PipelineOp::WithColumn {
+                        name: col_name,
+                        expr,
+                    } => {
+                        let polars_expr = to_typed_polars_expr(expr, &col_types);
+                        out.push_str(&format!(
+                            "        .with_columns([{}.alias(\"{}\")])  // |> withColumn(\"{}\", {})\n",
+                            polars_expr,
+                            col_name,
+                            col_name,
+                            Codegen::expr_to_xzz(expr)
+                        ));
+                    }
+
+                    // ── Chart: emitter 미지원 (런타임에서만 처리) ──────────────
+                    PipelineOp::Chart(config) => {
+                        out.push_str(&format!(
+                            "        // |> chart {{ type: {} }}  →  [x1zz:chart] JSON 출력\n",
+                            config.chart_type.as_str()
+                        ));
+                    }
+
+                    // ── v0.20 Cast ─────────────────────────────────────────────
+                    PipelineOp::Cast {
+                        col: cast_col,
+                        to_type,
+                    } => {
+                        let polars_type = match to_type.as_str() {
+                            "float" => "DataType::Float64",
+                            "int" => "DataType::Int64",
+                            "str" => "DataType::String",
+                            "bool" => "DataType::Boolean",
+                            other => other,
+                        };
+                        out.push_str(&format!(
+                            "        .with_columns([col(\"{}\").cast({})])  // |> cast(\"{}\", \"{}\")\n",
+                            cast_col, polars_type, cast_col, to_type
+                        ));
+                    }
+
+                    // ── Rename ─────────────────────────────────────────────────
+                    PipelineOp::Rename { old_name, new_name } => {
+                        out.push_str(&format!(
+                            "        .rename([\"{}\"], [\"{}\"], false)  // |> rename(\"{}\", \"{}\")\n",
+                            old_name, new_name, old_name, new_name
+                        ));
+                    }
+
+                    // ── Replace ────────────────────────────────────────────────
+                    PipelineOp::Replace {
+                        col: rep_col,
+                        from,
+                        to,
+                    } => {
+                        out.push_str(&format!(
+                            "        .with_columns([col(\"{}\").str().replace(lit(\"{}\"), lit(\"{}\"), false).alias(\"{}\")])  // |> replace(\"{}\", \"{}\", \"{}\")\n",
+                            rep_col, from, to, rep_col, rep_col, from, to
                         ));
                     }
                 }
@@ -367,6 +459,7 @@ fn generate_rust_src(
 fn validate_op_columns(
     op: &PipelineOp,
     col_types: &HashMap<String, String>,
+    var_col_types: &HashMap<String, HashMap<String, String>>,
     source_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // 컬럼명을 스키마에서 검사하는 내부 헬퍼
@@ -420,6 +513,50 @@ fn validate_op_columns(
         PipelineOp::FillNull { col, .. } => {
             check_col(col.as_str())?;
         }
+
+        // join: left_on/right_on 컬럼 검증 + other 변수 존재 확인
+        PipelineOp::Join {
+            other,
+            left_on,
+            right_on,
+            ..
+        } => {
+            // left_on 키들: 현재 스키마에서 검증
+            for key in left_on.iter().chain(right_on.iter()) {
+                check_col(key.as_str())?;
+            }
+            // other 변수 존재 확인
+            if !var_col_types.contains_key(other.as_str()) {
+                return Err(format!(
+                    "[SchemaError] at {}\n\
+                     join() 의 대상 변수 '{}' 가 아직 선언되지 않았습니다.\n\
+                     → join() 대상 변수를 먼저 파이프라인에서 선언하세요.",
+                    source_path, other
+                )
+                .into());
+            }
+        }
+
+        // rename: 컬럼 존재 검증
+        PipelineOp::Rename { old_name, .. } => {
+            check_col(old_name.as_str())?;
+        }
+
+        // replace: 컬럼 존재 검증
+        PipelineOp::Replace { col, .. } => {
+            check_col(col.as_str())?;
+        }
+
+        // withColumn: name은 새 컬럼이므로 스키마 검증 생략, expr 내 컬럼만 검증
+        PipelineOp::WithColumn { expr, .. } => {
+            validate_expr_columns(expr, col_types, source_path)?;
+        }
+
+        // Chart: 런타임에서만 처리 (검증 생략)
+        PipelineOp::Chart(_) => {}
+
+        // Cast: 컬럼은 DSL 작성자가 보장 (검증 생략)
+        PipelineOp::Cast { .. } => {}
     }
     Ok(())
 }
@@ -433,12 +570,11 @@ fn validate_expr_columns(
         Expr::Ident(col_name) => {
             if !col_types.contains_key(col_name.as_str()) {
                 let available: Vec<&str> = col_types.keys().map(String::as_str).collect();
-                let suggestion =
-                    find_closest_col(col_name, &available).unwrap_or(col_name);
+                let suggestion = find_closest_col(col_name, &available).unwrap_or(col_name);
                 return Err(format!(
                     "[SchemaError] at {}\n\
                      ─────────────────────────────────────────────\n\
-                     Cause   : filter() 에 선언되지 않은 컬럼이 있습니다.\n\
+                     Cause   : filter()/withColumn() 에 선언되지 않은 컬럼이 있습니다.\n\
                      Detail  : column '{}' not found in schema\n\
                      Available: {}\n\
                      → Did you mean: col(\"{}\")",
@@ -496,12 +632,17 @@ fn to_typed_polars_expr(expr: &Expr, col_types: &HashMap<String, String>) -> Str
             };
 
             let op_method = match op {
-                BinOpKind::Eq    => "eq",
+                BinOpKind::Eq => "eq",
                 BinOpKind::NotEq => "neq",
-                BinOpKind::Lt    => "lt",
-                BinOpKind::Gt    => "gt",
-                BinOpKind::LtEq  => "lt_eq",
-                BinOpKind::GtEq  => "gt_eq",
+                BinOpKind::Lt => "lt",
+                BinOpKind::Gt => "gt",
+                BinOpKind::LtEq => "lt_eq",
+                BinOpKind::GtEq => "gt_eq",
+                // ── 산술 연산자 (v0.16+) ──────────────────────
+                BinOpKind::Add => "add",
+                BinOpKind::Sub => "sub",
+                BinOpKind::Mul => "mul",
+                BinOpKind::Div => "div",
             };
             format!("{}.{}({})", l, op_method, r)
         }
@@ -524,8 +665,12 @@ fn edit_distance(a: &str, b: &str) -> usize {
     let b: Vec<char> = b.chars().collect();
     let (m, n) = (a.len(), b.len());
     let mut dp = vec![vec![0usize; n + 1]; m + 1];
-    for i in 0..=m { dp[i][0] = i; }
-    for j in 0..=n { dp[0][j] = j; }
+    for i in 0..=m {
+        dp[i][0] = i;
+    }
+    for j in 0..=n {
+        dp[0][j] = j;
+    }
     for i in 1..=m {
         for j in 1..=n {
             dp[i][j] = if a[i - 1] == b[j - 1] {

@@ -96,6 +96,14 @@ pub enum TokenKind {
     DropNull,
     /// fillNull
     FillNull,
+    /// join
+    Join,
+    /// withColumn
+    WithColumn,
+    /// on   (join 의 명명 인수)
+    On,
+    /// how  (join 의 명명 인수)
+    How,
     /// v  (불변 변수 선언)
     V,
     /// mut
@@ -108,6 +116,18 @@ pub enum TokenKind {
     False,
     /// desc  (orderBy 내 정렬 방향 키워드)
     Desc,
+    /// chart  (파이프라인 시각화 연산)
+    Chart,
+    /// cast  (타입 캐스팅 연산 — cast("col", "float"))
+    Cast,
+    /// rename  (컬럼 이름 변경 — rename("old", "new"))
+    Rename,
+    /// replace  (문자열 치환 연산 — replace("col", ".", ""))
+    Replace,
+    /// left_on  (join 의 left 키 명명 인수)
+    LeftOn,
+    /// right_on  (join 의 right 키 명명 인수)
+    RightOn,
 
     // ── 리터럴 / 식별자 ─────────────────────────────
     /// 일반 식별자

@@ -1,18 +1,27 @@
 mod cli;
+mod predict;
+mod project;
+mod schema;
 mod ux;
 
 use clap::Parser;
 use cli::{Cli, Commands};
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
-        // ── run: .xzz 데이터 분석 코드 실행 ────────────────────────────────
-        //   Lexer → Parser → TypeChecker → Runtime (Polars LazyFrame 체인)
-        Commands::Run { file, release, verbose } => {
+        // ── run: .xzz 데이터 분석 코드 실행 (또는 NQP 예측) ────────────────
+        //   기본: Lexer → Parser → TypeChecker → Runtime (Polars LazyFrame 체인)
+        //   --predict: 코드 실행 없이 NQP 모델로 시맨틱 결과 예측
+        Commands::Run {
+            file,
+            release,
+            verbose,
+            predict,
+        } => {
             let source_path = match file.to_str() {
                 Some(p) => p.to_owned(),
                 None => {
@@ -37,6 +46,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 std::process::exit(1);
             }
 
+            // ── --predict 분기: NQP 시맨틱 예측 모드 ───────────────────────
+            if predict {
+                // predict::run_predict 는 내부적으로 Python 서브프로세스를
+                // spawn_blocking 없이 동기로 호출해도 무방 (Tokio IO 미사용).
+                // 그러나 wait_with_output() 블로킹 호출이 있으므로
+                // spawn_blocking 스레드에서 실행한다.
+                let result =
+                    tokio::task::spawn_blocking(move || predict::run_predict(&source_path))
+                        .await
+                        .unwrap_or_else(|e| Err(format!("스레드 패닉: {:?}", e)));
+
+                if let Err(e) = result {
+                    eprintln!("{}", e);
+                    std::process::exit(1);
+                }
+                return Ok(());
+            }
+
+            // ── 일반 런타임 실행 분기 ────────────────────────────────────────
             if release {
                 println!("🚀  릴리즈 모드 (Polars 최적화 플래그 활성화)");
                 println!();
@@ -68,9 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let source_path = match file.to_str() {
                 Some(p) => p.to_owned(),
                 None => {
-                    eprintln!(
-                        "IO 에러: 파일 경로를 UTF-8 문자열로 변환할 수 없습니다."
-                    );
+                    eprintln!("IO 에러: 파일 경로를 UTF-8 문자열로 변환할 수 없습니다.");
                     std::process::exit(1);
                 }
             };
@@ -157,6 +183,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 output.display()
             );
             println!("   [x1zz-sde 엔진 연동 예정]  정상 종료.");
+        }
+
+        // ── new: 새 프로젝트 생성 ─────────────────────────────────────────────
+        Commands::New { name } => {
+            if let Err(e) = project::create_project(&name) {
+                eprintln!("{}", e);
+                std::process::exit(1);
+            }
+        }
+
+        // ── import: CSV → x1zz 타입 정의 + load 문 자동 생성 ─────────────────
+        Commands::Import { file } => {
+            if let Err(e) = schema::import_csv(&file) {
+                eprintln!("{}", e);
+                std::process::exit(1);
+            }
         }
     }
 

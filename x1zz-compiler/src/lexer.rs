@@ -11,7 +11,6 @@
 ///   - 새 키워드: groupBy, sum, mean, min, max, orderBy, take, dropNull, fillNull
 ///   - 불리언 키워드: true, false
 ///   - 정렬 방향 키워드: desc
-
 use crate::error::{CompileError, CompileResult, ErrorKind};
 use crate::token::{Span, Token, TokenKind};
 
@@ -75,11 +74,11 @@ impl<'src> Lexer<'src> {
             match self.advance() {
                 Some('"') => break,
                 Some('\\') => match self.advance() {
-                    Some('n')  => s.push('\n'),
-                    Some('t')  => s.push('\t'),
+                    Some('n') => s.push('\n'),
+                    Some('t') => s.push('\t'),
                     Some('\\') => s.push('\\'),
-                    Some('"')  => s.push('"'),
-                    Some(c)    => s.push(c),
+                    Some('"') => s.push('"'),
+                    Some(c) => s.push(c),
                     None => {
                         return Err(CompileError::new(
                             ErrorKind::UnexpectedToken("EOF in string escape".into()),
@@ -110,7 +109,10 @@ impl<'src> Lexer<'src> {
         buf.push(first);
 
         // 정수 부분 (underscore 무시)
-        while self.peek().map_or(false, |c| c.is_ascii_digit() || c == '_') {
+        while self
+            .peek()
+            .map_or(false, |c| c.is_ascii_digit() || c == '_')
+        {
             let c = self.advance().unwrap();
             if c != '_' {
                 buf.push(c);
@@ -119,9 +121,12 @@ impl<'src> Lexer<'src> {
 
         // 소수점 + 소수 부분
         if self.peek() == Some('.') {
-            self.advance();   // '.' 소비
+            self.advance(); // '.' 소비
             buf.push('.');
-            while self.peek().map_or(false, |c| c.is_ascii_digit() || c == '_') {
+            while self
+                .peek()
+                .map_or(false, |c| c.is_ascii_digit() || c == '_')
+            {
                 let c = self.advance().unwrap();
                 if c != '_' {
                     buf.push(c);
@@ -138,7 +143,10 @@ impl<'src> Lexer<'src> {
     fn read_ident(&mut self, first: char) -> TokenKind {
         let mut buf = String::new();
         buf.push(first);
-        while self.peek().map_or(false, |c| c.is_alphanumeric() || c == '_') {
+        while self
+            .peek()
+            .map_or(false, |c| c.is_alphanumeric() || c == '_')
+        {
             buf.push(self.advance().unwrap());
         }
         Self::keyword_or_ident(buf)
@@ -147,30 +155,44 @@ impl<'src> Lexer<'src> {
     fn keyword_or_ident(s: String) -> TokenKind {
         match s.as_str() {
             // ── 기존 키워드 ──────────────────────────────────
-            "type"     => TokenKind::Type,
-            "load"     => TokenKind::Load,
-            "filter"   => TokenKind::Filter,
-            "select"   => TokenKind::Select,
-            "count"    => TokenKind::Count,
-            "v"        => TokenKind::V,
-            "mut"      => TokenKind::Mut,
-            "Option"   => TokenKind::OptionKw,
+            "type" => TokenKind::Type,
+            "load" => TokenKind::Load,
+            "filter" => TokenKind::Filter,
+            "select" => TokenKind::Select,
+            "count" => TokenKind::Count,
+            "v" => TokenKind::V,
+            "mut" => TokenKind::Mut,
+            "Option" => TokenKind::OptionKw,
             // ── v0.16 신규 파이프라인 연산 키워드 ────────────
-            "groupBy"  => TokenKind::GroupBy,
-            "sum"      => TokenKind::Sum,
-            "mean"     => TokenKind::Mean,
-            "min"      => TokenKind::Min,
-            "max"      => TokenKind::Max,
-            "orderBy"  => TokenKind::OrderBy,
-            "take"     => TokenKind::Take,
+            "groupBy" => TokenKind::GroupBy,
+            "sum" => TokenKind::Sum,
+            "mean" => TokenKind::Mean,
+            "min" => TokenKind::Min,
+            "max" => TokenKind::Max,
+            "orderBy" => TokenKind::OrderBy,
+            "take" => TokenKind::Take,
             "dropNull" => TokenKind::DropNull,
             "fillNull" => TokenKind::FillNull,
+            // ── v0.16+ 신규 파이프라인 연산 키워드 ───────────
+            "join" => TokenKind::Join,
+            "withColumn" => TokenKind::WithColumn,
+            "on" => TokenKind::On,
+            "how" => TokenKind::How,
             // ── v0.16 리터럴 / 명명 인수 키워드 ─────────────
-            "true"     => TokenKind::True,
-            "false"    => TokenKind::False,
-            "desc"     => TokenKind::Desc,
-            // ── 식별자 ───────────────────────────────────────
-            _          => TokenKind::Ident(s),
+            "true" => TokenKind::True,
+            "false" => TokenKind::False,
+            "desc" => TokenKind::Desc,
+            // ── v0.19 시각화 키워드 ───────────────────────────
+            "chart" => TokenKind::Chart,
+            // ── v0.20 타입 캐스팅 키워드 ─────────────────────
+            "cast" => TokenKind::Cast,
+            // ── v0.21 신규 파이프라인 연산 키워드 ────────────────
+            "rename" => TokenKind::Rename,
+            "replace" => TokenKind::Replace,
+            "left_on" => TokenKind::LeftOn,
+            "right_on" => TokenKind::RightOn,
+            // ── 식별자 ───────────────────────────────────────────
+            _ => TokenKind::Ident(s),
         }
     }
 
@@ -191,7 +213,7 @@ impl<'src> Lexer<'src> {
         let span = self.span();
         let ch = match self.advance() {
             Some(c) => c,
-            None    => return Ok(Token::new(TokenKind::Eof, span)),
+            None => return Ok(Token::new(TokenKind::Eof, span)),
         };
 
         let kind = match ch {
@@ -248,9 +270,9 @@ impl<'src> Lexer<'src> {
             '-' if self.peek().map_or(false, |c| c.is_ascii_digit()) => {
                 let digit = self.advance().unwrap();
                 match self.read_number(digit) {
-                    TokenKind::IntLit(n)   => TokenKind::IntLit(-n),
+                    TokenKind::IntLit(n) => TokenKind::IntLit(-n),
                     TokenKind::FloatLit(f) => TokenKind::FloatLit(-f),
-                    other                  => other,
+                    other => other,
                 }
             }
             '-' => TokenKind::Minus,
@@ -320,34 +342,46 @@ mod tests {
     #[test]
     fn test_var_decl_and_pipeline_token() {
         let kinds = tokenize("v result = load(\"data.csv\") :: MySchema |> count");
-        assert!(kinds.contains(&TokenKind::V),            "V 토큰 없음");
-        assert!(kinds.contains(&TokenKind::Assign),       "Assign 토큰 없음");
-        assert!(kinds.contains(&TokenKind::Load),         "Load 토큰 없음");
-        assert!(kinds.contains(&TokenKind::TypeAssign),   "TypeAssign(::) 토큰 없음");
-        assert!(kinds.contains(&TokenKind::Pipeline),     "|> 토큰 없음");
-        assert!(kinds.contains(&TokenKind::Count),        "Count 토큰 없음");
-        assert!(kinds.contains(&TokenKind::Ident("MySchema".into())), "MySchema Ident 없음");
-        assert!(kinds.contains(&TokenKind::StringLit("data.csv".into())), "StringLit 없음");
+        assert!(kinds.contains(&TokenKind::V), "V 토큰 없음");
+        assert!(kinds.contains(&TokenKind::Assign), "Assign 토큰 없음");
+        assert!(kinds.contains(&TokenKind::Load), "Load 토큰 없음");
+        assert!(
+            kinds.contains(&TokenKind::TypeAssign),
+            "TypeAssign(::) 토큰 없음"
+        );
+        assert!(kinds.contains(&TokenKind::Pipeline), "|> 토큰 없음");
+        assert!(kinds.contains(&TokenKind::Count), "Count 토큰 없음");
+        assert!(
+            kinds.contains(&TokenKind::Ident("MySchema".into())),
+            "MySchema Ident 없음"
+        );
+        assert!(
+            kinds.contains(&TokenKind::StringLit("data.csv".into())),
+            "StringLit 없음"
+        );
     }
 
     // ── 테스트 2: mut 키워드 + 음수 리터럴 ──────────────────────────────────
     #[test]
     fn test_mut_keyword_and_negative_literal() {
         let kinds = tokenize("mut v x = -42");
-        assert!(kinds.contains(&TokenKind::Mut),           "Mut 토큰 없음");
-        assert!(kinds.contains(&TokenKind::V),             "V 토큰 없음");
-        assert!(kinds.contains(&TokenKind::IntLit(-42)),   "IntLit(-42) 없음");
+        assert!(kinds.contains(&TokenKind::Mut), "Mut 토큰 없음");
+        assert!(kinds.contains(&TokenKind::V), "V 토큰 없음");
+        assert!(kinds.contains(&TokenKind::IntLit(-42)), "IntLit(-42) 없음");
     }
 
     // ── 테스트 3: Option<float> 타입 토크나이징 ─────────────────────────────
     #[test]
     fn test_option_type_tokens() {
         let kinds = tokenize("pm10: Option<float>");
-        assert!(kinds.contains(&TokenKind::Colon),         "Colon 없음");
-        assert!(kinds.contains(&TokenKind::OptionKw),      "OptionKw 없음");
-        assert!(kinds.contains(&TokenKind::Lt),            "Lt(<) 없음");
-        assert!(kinds.contains(&TokenKind::Ident("float".into())), "float Ident 없음");
-        assert!(kinds.contains(&TokenKind::Gt),            "Gt(>) 없음");
+        assert!(kinds.contains(&TokenKind::Colon), "Colon 없음");
+        assert!(kinds.contains(&TokenKind::OptionKw), "OptionKw 없음");
+        assert!(kinds.contains(&TokenKind::Lt), "Lt(<) 없음");
+        assert!(
+            kinds.contains(&TokenKind::Ident("float".into())),
+            "float Ident 없음"
+        );
+        assert!(kinds.contains(&TokenKind::Gt), "Gt(>) 없음");
     }
 
     // ── 테스트 4: 비교 연산자 전체 ──────────────────────────────────────────
@@ -367,7 +401,10 @@ mod tests {
     fn test_comment_ignored() {
         let kinds = tokenize("v x = 1 // this is a comment\n");
         // 주석 내용은 토큰으로 나타나지 않아야 함
-        assert!(!kinds.contains(&TokenKind::Slash), "Slash 토큰이 주석에서 생성됨");
+        assert!(
+            !kinds.contains(&TokenKind::Slash),
+            "Slash 토큰이 주석에서 생성됨"
+        );
         assert!(kinds.contains(&TokenKind::V));
         assert!(kinds.contains(&TokenKind::IntLit(1)));
     }
@@ -388,7 +425,9 @@ mod tests {
         // 첫 토큰 'v' → line 1
         assert_eq!(tokens[0].span.line, 1);
         // 두 번째 토큰 'result' → line 2
-        let result_tok = tokens.iter().find(|t| t.kind == TokenKind::Ident("result".into()));
+        let result_tok = tokens
+            .iter()
+            .find(|t| t.kind == TokenKind::Ident("result".into()));
         assert!(result_tok.is_some());
         assert_eq!(result_tok.unwrap().span.line, 2);
     }
@@ -400,7 +439,10 @@ mod tests {
         let result = lexer.tokenize();
         assert!(result.is_err(), "@ 문자는 에러여야 함");
         let err = result.unwrap_err();
-        assert!(matches!(err.kind, crate::error::ErrorKind::UnexpectedChar('@')));
+        assert!(matches!(
+            err.kind,
+            crate::error::ErrorKind::UnexpectedChar('@')
+        ));
     }
 
     // ── 테스트 9 (v0.16): 신규 파이프라인 키워드 토크나이징 ──────────────────
@@ -408,13 +450,13 @@ mod tests {
     fn test_new_pipeline_keywords() {
         let src = "groupBy sum mean min max orderBy take dropNull fillNull";
         let kinds = tokenize(src);
-        assert!(kinds.contains(&TokenKind::GroupBy),  "GroupBy 없음");
-        assert!(kinds.contains(&TokenKind::Sum),      "Sum 없음");
-        assert!(kinds.contains(&TokenKind::Mean),     "Mean 없음");
-        assert!(kinds.contains(&TokenKind::Min),      "Min 없음");
-        assert!(kinds.contains(&TokenKind::Max),      "Max 없음");
-        assert!(kinds.contains(&TokenKind::OrderBy),  "OrderBy 없음");
-        assert!(kinds.contains(&TokenKind::Take),     "Take 없음");
+        assert!(kinds.contains(&TokenKind::GroupBy), "GroupBy 없음");
+        assert!(kinds.contains(&TokenKind::Sum), "Sum 없음");
+        assert!(kinds.contains(&TokenKind::Mean), "Mean 없음");
+        assert!(kinds.contains(&TokenKind::Min), "Min 없음");
+        assert!(kinds.contains(&TokenKind::Max), "Max 없음");
+        assert!(kinds.contains(&TokenKind::OrderBy), "OrderBy 없음");
+        assert!(kinds.contains(&TokenKind::Take), "Take 없음");
         assert!(kinds.contains(&TokenKind::DropNull), "DropNull 없음");
         assert!(kinds.contains(&TokenKind::FillNull), "FillNull 없음");
     }
@@ -423,7 +465,7 @@ mod tests {
     #[test]
     fn test_boolean_keywords() {
         let kinds = tokenize("true false");
-        assert!(kinds.contains(&TokenKind::True),  "True 없음");
+        assert!(kinds.contains(&TokenKind::True), "True 없음");
         assert!(kinds.contains(&TokenKind::False), "False 없음");
     }
 

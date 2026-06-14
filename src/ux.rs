@@ -8,9 +8,7 @@ pub fn create_spinner(message: &'static str) -> ProgressBar {
     pb.set_style(
         ProgressStyle::with_template("{spinner:.green} {msg}")
             .unwrap()
-            .tick_strings(&[
-                "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏",
-            ]),
+            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
     );
     pb.set_message(message);
     pb.enable_steady_tick(Duration::from_millis(80));
@@ -20,7 +18,7 @@ pub fn create_spinner(message: &'static str) -> ProgressBar {
 /// 심사위원 전용 NQP 정적 분석 리포트를 터미널에 출력합니다.
 pub fn print_mock_nqp_report(file_name: &str) {
     let border = "═".repeat(62);
-    let thin   = "─".repeat(62);
+    let thin = "─".repeat(62);
 
     println!("{}", border.cyan());
     println!(
@@ -30,10 +28,7 @@ pub fn print_mock_nqp_report(file_name: &str) {
             .bold()
     );
     println!("{}", border.cyan());
-    println!(
-        "  대상 파일  : {}",
-        file_name.yellow().bold()
-    );
+    println!("  대상 파일  : {}", file_name.yellow().bold());
     println!(
         "  분석 상태  : {}   Confidence: {}",
         "✔ SUCCESS".green().bold(),
@@ -46,10 +41,7 @@ pub fn print_mock_nqp_report(file_name: &str) {
     println!("{}", thin.cyan());
 
     // ── Data Pipeline Delta 테이블 ─────────────────────────────────
-    println!(
-        "  {}",
-        "▶  Data Pipeline Delta".bold().white()
-    );
+    println!("  {}", "▶  Data Pipeline Delta".bold().white());
     println!(
         "  {:<10} {:<28} {:<10} {}",
         "Step".bold(),
@@ -60,10 +52,30 @@ pub fn print_mock_nqp_report(file_name: &str) {
     println!("  {}", "·".repeat(58).dimmed());
 
     let steps = [
-        ("[Step 0]", "CSV Ingest & Schema Validation",   "+100 000", "  4.1 ms"),
-        ("[Step 1]", "Temporal Resampling  (1 h → 1 d)", " −99 976", "  2.8 ms"),
-        ("[Step 2]", "Null-fill  (rolling mean, w=7)",   "     ±0",  "  1.3 ms"),
-        ("[Step 3]", "Feature Eng.  (PM10 / PM25 ratio)", "  +1 col", "  0.9 ms"),
+        (
+            "[Step 0]",
+            "CSV Ingest & Schema Validation",
+            "+100 000",
+            "  4.1 ms",
+        ),
+        (
+            "[Step 1]",
+            "Temporal Resampling  (1 h → 1 d)",
+            " −99 976",
+            "  2.8 ms",
+        ),
+        (
+            "[Step 2]",
+            "Null-fill  (rolling mean, w=7)",
+            "     ±0",
+            "  1.3 ms",
+        ),
+        (
+            "[Step 3]",
+            "Feature Eng.  (PM10 / PM25 ratio)",
+            "  +1 col",
+            "  0.9 ms",
+        ),
     ];
 
     for (step, op, delta, lat) in &steps {
@@ -79,10 +91,7 @@ pub fn print_mock_nqp_report(file_name: &str) {
     println!("{}", thin.cyan());
 
     // ── Statistical Insights ──────────────────────────────────────
-    println!(
-        "  {}",
-        "▶  Statistical Insights".bold().white()
-    );
+    println!("  {}", "▶  Statistical Insights".bold().white());
     println!(
         "  {}  PM2.5 결측률 {}  →  rolling mean 자동 보정 적용됨",
         "⚠ WARN".yellow().bold(),
@@ -110,8 +119,7 @@ pub fn print_mock_nqp_report(file_name: &str) {
     println!("{}", border.cyan());
     println!(
         "  {}",
-        "분석 완료.  x1zz check 는 패닉 없이 안전하게 종료되었습니다."
-            .green()
+        "분석 완료.  x1zz check 는 패닉 없이 안전하게 종료되었습니다.".green()
     );
     println!("{}", border.cyan());
 }

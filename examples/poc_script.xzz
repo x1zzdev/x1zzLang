@@ -1,4 +1,4 @@
-// x1zzLang PoC Script v0.15
+// x1zzLang PoC Script v0.20
 //
 // 기능 시연:
 //   1. 타입 선언 (TypeDecl + Option<T>)
@@ -6,6 +6,11 @@
 //   3. Dynamic Schema Bridge: CSV 한글 헤더 → 스키마 필드 자동 매핑
 //   4. 다중 파이프라인: 변수 참조(VarRef)로 이전 결과 재사용
 //   5. 타입 검증 런타임 체크 (Option<T> vs 필수 타입)
+//
+// [v0.20 변경]
+//   pm10/pm25 컬럼의 float 캐스팅은 더 이상 런타임이 자동으로 수행하지 않는다.
+//   DSL 레벨에서 |> cast("pm10", "float") 으로 명시 선언한다.
+//   이로써 runtime 은 어떤 도메인 스키마도 가정하지 않는 진정한 DSL 엔진이 된다.
 
 // ── 스키마 정의 ───────────────────────────────────────────────────────────────
 // CSV 컬럼 순서: 일시, 구분, 미세먼지(PM10), 초미세먼지(PM25)
@@ -17,9 +22,11 @@ type AirQuality = {
   pm25: Option<float>,
 };
 
-// ── 파이프라인 1: CSV 로드 + 기본 필터링 ─────────────────────────────────────
-// PM10이 50 초과인 데이터 선별 후 핵심 컬럼만 선택
+// ── 파이프라인 1: CSV 로드 + 타입 캐스팅 + 기본 필터링 ──────────────────────
+// cast()는 DSL에서 명시적으로 선언한다. runtime은 pm10/pm25를 알지 못한다.
 v air_raw = load("examples/seoul_air_2008_2011.csv") :: AirQuality
+  |> cast("pm10", "float")
+  |> cast("pm25", "float")
   |> filter(pm10 > 50)
   |> select([date, station, pm10, pm25]);
 
@@ -29,11 +36,10 @@ v air_filtered = air_raw
   |> filter(pm25 > 10)
   |> count;
 
-
-v a = 10;
-
+// ── 파이프라인 3: 2026년 데이터 로드 + 명시적 캐스팅 ────────────────────────
 v air_raw2 = load("examples/seoul_air_2026.csv") :: AirQuality
-  |> filter (pm10 > 20)
-  |> filter (pm25 > a)
+  |> cast("pm10", "float")
+  |> cast("pm25", "float")
+  |> filter(pm10 > 20)
   |> select([date, station, pm10, pm25])
   |> count;
