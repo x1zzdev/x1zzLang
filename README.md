@@ -13,44 +13,167 @@
 
 **Scripting on the surface. Compiled at its core. | AI-Augmented Data Pipeline Language**
 
-![x1zzLang Benchmark](benches/x1zzLang_benchmark2.png)
-
-> > **Performance Snapshot:** On our benchmarked 3.4 million-row workload, `x1zzLang` achieved a **3.84× speedup** over an equivalent Pandas pipeline by compiling data pipelines into optimized Polars LazyFrame execution plans with automatic parallelization. *(For a visual workflow interface, see the [x1zzETL Visual IDE](https://github.com/x1zzdev/x1zzLang-visual-ide).)*
-
-
-> 💻 **"If Python/Pandas is the Microsoft Windows of data science, 🍏 x1zzLang is the Apple Mac."** 
->
-> We tightly integrate the ultimate engine (Rust + Polars) with a custom compiler OS (Incremental Architecture) to eliminate environment friction and deliver predictable, raw performance.
-
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Language: .xzz](https://img.shields.io/badge/Language-.xzz-orange.svg)]()
 [![Backend: Rust + Polars](https://img.shields.io/badge/Backend-Rust%20%2B%20Polars-red.svg)]()
-[![Status: In Development](https://img.shields.io/badge/Status-In%20Development%20(2026)-yellow.svg)]()
+[![Crates.io](https://img.shields.io/badge/crates.io-x1zz-orange)](https://crates.io/crates/x1zz)
+[![Status: v0.2.0](https://img.shields.io/badge/Status-v0.2.0-green.svg)]()
 
 [한국어 README](README_kr.md)
 
 </div>
 
-```xzz
-// This is all it takes. No imports. No main(). No boilerplate.
-type WelfareSchema = {
-  region:     string,
-  population: int,
-  income:     Option<float>,   // nullable — expected in public datasets
-  support:    bool,
-}
+---
 
-v data = load("welfare_2026.csv") :: WelfareSchema
+## Installation
 
-v blind_spots = data
-  |> filter(col("income") < 1_200_000)
-  |> filter(col("support") == false)
-  |> groupBy("region")
-  |> count("population")
-  |> orderBy("population", desc: true)
+```bash
+cargo install x1zz
 ```
 
-> *Execution flows from the top of the file. The language is the analysis.*
+> Requires Rust 1.85+. Install Rust at [rustup.rs](https://rustup.rs)
+
+Or build from source:
+
+```bash
+git clone https://github.com/x1zzdev/x1zzLang.git
+cd x1zzLang
+cargo build --release
+```
+
+---
+
+## Quick Start
+
+```bash
+x1zz new demo
+cd demo
+x1zz run example.xzz
+```
+
+Expected output:
+
+```
+📊 [x1zz Execution Result: 'result' (Top 5 Rows)]
+────────────────────────────────────────────────────────────
+shape: (7, 4)
+┌───────────┬──────┬──────┬────────────┐
+│ station   ┆ pm10 ┆ pm25 ┆ date       │
+│ ---       ┆ ---  ┆ ---  ┆ ---        │
+│ str       ┆ f64  ┆ f64  ┆ str        │
+╞═══════════╪══════╪══════╪════════════╡
+│ Songpa    ┆ 68.1 ┆ 36.4 ┆ 2026-01-10 │
+│ Dobong    ┆ 55.9 ┆ 29.1 ┆ 2026-01-07 │
+│ Gangseo   ┆ 52.3 ┆ 28.4 ┆ 2026-01-02 │
+│ ...       ┆ ...  ┆ ...  ┆ ...        │
+└───────────┴──────┴──────┴────────────┘
+```
+
+Export to CSV:
+
+```bash
+x1zz run example.xzz --output result.csv
+```
+
+---
+
+## CLI
+
+```bash
+x1zz new   <project-name>                     # create new project
+x1zz run   <file.xzz>                         # execute pipeline
+x1zz run   <file.xzz> --output result.csv     # execute + export CSV
+x1zz run   <file.xzz> --verbose               # show token stream + AST
+x1zz check <file.xzz>                         # static analysis
+x1zz emit  rust <file.xzz>                    # emit transpiled Rust source
+x1zz import <data.csv>                        # auto-generate type + load statement
+```
+
+---
+
+## Examples
+
+### 1. CSV Load + Filter + Export
+
+```xzz
+type AirQuality = {
+    station: string,
+    pm10: float,
+    pm25: float,
+    date: string,
+}
+
+v data = load("data/sample.csv") :: AirQuality
+
+v result = data
+    |> filter(col("pm10") > 40.0)
+    |> orderBy("pm10", desc: true)
+```
+
+```bash
+x1zz run example.xzz --output result.csv
+```
+
+---
+
+### 2. GroupBy + Mean Aggregation
+
+```xzz
+type SalesData = {
+    region: string,
+    product: string,
+    revenue: float,
+}
+
+v data = load("data/sales.csv") :: SalesData
+
+v by_region = data
+    |> groupBy("region")
+    |> mean("revenue")
+    |> orderBy("revenue", desc: true)
+```
+
+---
+
+### 3. Full Pipeline (Filter → GroupBy → Sum → Take)
+
+```xzz
+type WelfareSchema = {
+    region:     string,
+    population: int,
+    income:     Option<float>,
+    support:    bool,
+}
+
+v data = load("data/welfare_2026.csv") :: WelfareSchema
+
+v blind_spots = data
+    |> dropNull("income")
+    |> filter(col("income") < 1_200_000)
+    |> filter(col("support") == false)
+    |> groupBy("region")
+    |> count("population")
+    |> orderBy("population", desc: true)
+    |> take(10)
+```
+
+---
+
+### 4. Seoul Air Quality Pipeline (included in repo)
+
+```bash
+x1zz run examples/poc_script.xzz
+```
+
+Uses real Seoul air quality CSV data included in `examples/`.
+
+---
+
+## Benchmark
+
+![x1zzLang Benchmark](benches/x1zzLang_benchmark2.png)
+
+> **Performance Snapshot:** On our benchmarked 3.4 million-row workload, `x1zzLang` achieved a **3.84× speedup** over an equivalent Pandas pipeline by compiling data pipelines into optimized Polars LazyFrame execution plans with automatic parallelization. *(For a visual workflow interface, see the [x1zzETL Visual IDE](https://github.com/x1zzdev/x1zzLang-visual-ide).)*
 
 ---
 
@@ -76,6 +199,66 @@ The real barriers to public data analysis today:
 x1zzLang removes these barriers **at the language design level**.  
 `filter`, `groupBy`, and `mean` are not library calls — they are **native syntax**.  
 Welfare officers, environmental researchers, and policy analysts should be able to work with data directly.
+
+---
+
+```xzz
+// This is all it takes. No imports. No main(). No boilerplate.
+type WelfareSchema = {
+  region:     string,
+  population: int,
+  income:     Option<float>,   // nullable — expected in public datasets
+  support:    bool,
+}
+
+v data = load("welfare_2026.csv") :: WelfareSchema
+
+v blind_spots = data
+  |> filter(col("income") < 1_200_000)
+  |> filter(col("support") == false)
+  |> groupBy("region")
+  |> count("population")
+  |> orderBy("population", desc: true)
+```
+
+> *Execution flows from the top of the file. The language is the analysis.*
+
+---
+
+## Compiler Architecture
+
+```
+x1zz-compiler
+│
+├── Lexer          — tokenization of .xzz source
+├── Token          — token type definitions
+├── Parser         — recursive descent parser
+├── AST            — abstract syntax tree nodes
+├── Type Checker   — schema validation, type inference
+├── Code Generator — Rust transpiler (LazyFrame emission)
+└── Error          — structured compile-time diagnostics
+```
+
+**Pipeline:**
+
+```
+.xzz source
+     │
+     ▼
+  Lexer  →  Token stream
+     │
+     ▼
+  Parser  →  AST
+     │
+     ▼
+  Type Checker (Schema + pipeline type inference)
+     │
+     ▼
+  Code Generator  →  Rust source
+     │
+     ▼
+  rustc + Polars LazyFrame  →  Native binary
+```
 
 ---
 
@@ -254,44 +437,6 @@ blind_spots |> plot.bar(x: "region", y: "population")
 
 ---
 
-## Compiler Architecture
-
-```
-x1zz-compiler
-│
-├── Lexer          — tokenization of .xzz source
-├── Token          — token type definitions
-├── Parser         — recursive descent parser
-├── AST            — abstract syntax tree nodes
-├── Type Checker   — schema validation, type inference
-├── Code Generator — Rust transpiler (LazyFrame emission)
-└── Error          — structured compile-time diagnostics
-```
-
-**Pipeline:**
-
-```
-.xzz source
-     │
-     ▼
-  Lexer  →  Token stream
-     │
-     ▼
-  Parser  →  AST
-     │
-     ▼
-  Type Checker (Schema + pipeline type inference)
-     │
-     ▼
-  Code Generator  →  Rust source
-     │
-     ▼
-  rustc + Polars LazyFrame  →  Native binary
-```
-
-
----
-
 ## Roadmap
 
 | Phase | Goal | Key Components | Status |
@@ -304,6 +449,13 @@ x1zz-compiler
 ---
 
 ## Release Notes
+
+### v0.2.0 — MVP Release
+
+- `x1zz new` now generates a fully runnable `example.xzz` + `data/sample.csv`
+- `x1zz run --output result.csv`: CSV export added
+- `cargo install x1zz` available on crates.io
+- Version bump following semantic versioning
 
 ### v0.17 — Debug & Normalization Pass
 - `BoolLit` support: `col("support") == false` now evaluates correctly in filter conditions
@@ -363,6 +515,7 @@ x1zzLang Visual IDE successfully developed — providing a graphical editing and
 | GroupBy / Agg Operators (sum, mean, min, max, count) | Implemented (v0.16) |
 | OrderBy / Take / DropNull / FillNull | Implemented (v0.16) |
 | BoolLit & col() expression support | Implemented (v0.17) |
+| CSV Export (`--output`) | Implemented (v0.2.0) |
 | SDE (Synthetic Data Engine) | Implemented |
 | NQP State Prediction (PoC) | Implemented (dryrun) |
 | Benchmark Suite (Pandas vs. x1zzLang) | Implemented (v0.16) |
@@ -374,37 +527,13 @@ x1zzLang Visual IDE successfully developed — providing a graphical editing and
 
 ---
 
-## Installation
-
-```bash
-# Public release planned after Phase 2 completion.
-# Build from source:
-git clone https://github.com/ax1sofficially-alt/x1zzLang.git
-cd x1zz-lang
-cargo build --release
-```
-
----
-
-## CLI
-
-```bash
-x1zz check  src/pipeline/analysis.xzz            # type and schema validation
-x1zz fmt    src/pipeline/analysis.xzz            # format source
-x1zz run    src/pipeline/analysis.xzz            # execute pipeline
-x1zz run    src/pipeline/analysis.xzz --predict  # NQP pre-execution prediction
-x1zz emit   rust src/pipeline/analysis.xzz       # emit transpiled Rust source
-```
-
----
-
 ## Contributing
 
 ## Contributions & Notice
 
-`x1zzLang` is an open-source project, and we welcome all forms of feedback and interest.
+`x1zzLang` is an open-source project, and I welcome all forms of feedback and interest.
 
-However, to comply with the **official regulations of the 8th Korea-CodeFair 2026 (ensuring pure self-development and research ethics)**, we are **temporarily suspending the acceptance of Pull Requests (code contributions) until the end of the finals in October 2026**. This measure is taken to prevent any ambiguity regarding authorship and to guarantee project integrity during the evaluation period.
+However, to comply with the **official regulations of the 8th Korea-CodeFair 2026 (ensuring pure self-development and research ethics)**, I am **temporarily suspending the acceptance of Pull Requests (code contributions) until the end of the finals in October 2026**. This measure is taken to prevent any ambiguity regarding authorship and to guarantee project integrity during the evaluation period.
 
 * **Issues (Suggestions & Bug Reports):** 🟢 Always welcome! Please feel free to open an issue for feature requests, bug reports, or conceptual discussions.
 * **Pull Requests (Code Contributions):** 🟡 Will be reopened after the final competition in October 2026.

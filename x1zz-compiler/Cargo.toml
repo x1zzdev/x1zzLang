@@ -5,6 +5,9 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "x1zzLang compiler core — Lexer, Parser, AST, Type Checker, Codegen, and Polars LazyFrame runtime for .xzz data pipeline scripts."
+keywords = ["compiler", "data", "polars", "pipeline", "csv"]
+categories = ["compilers", "science"]
 
 [dependencies]
 # Polars 런타임 엔진 (x1zz-sde 버전과 통일)

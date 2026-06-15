@@ -20,6 +20,7 @@ pub enum Commands {
     ///
     /// 예: x1zz run examples/poc_script.xzz
     /// 예: x1zz run examples/poc_script.xzz --predict
+    /// 예: x1zz run examples/pipeline.xzz --output result.csv
     Run {
         /// 실행할 .xzz 소스 파일 경로
         file: PathBuf,
@@ -36,6 +37,12 @@ pub enum Commands {
         /// — 코드를 실행하지 않고 NQP 모델을 통해 예측 결과를 반환합니다
         #[arg(long)]
         predict: bool,
+
+        /// 실행 결과를 CSV 파일로 저장합니다
+        ///
+        /// 예: --output result.csv
+        #[arg(long)]
+        output: Option<PathBuf>,
     },
 
     /// sLM 기반 정적 상태 분석을 수행합니다 (Neural Query Planner)

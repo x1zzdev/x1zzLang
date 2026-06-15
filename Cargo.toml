@@ -8,18 +8,23 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["Jangseowoo <ax1s.x1zz.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/ax1sofficially-alt/x1zzLang"
+repository = "https://github.com/x1zzdev/x1zzLang"
 
 [package]
 name = "x1zz"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["Jangseowoo <ax1s.x1zz.com>"]
 license = "Apache-2.0"
+description = "x1zzLang — scripting on the surface, compiled at its core. A data pipeline language that compiles .xzz scripts into optimized Polars LazyFrame execution plans."
+keywords = ["data", "pipeline", "polars", "compiler", "csv"]
+categories = ["command-line-utilities", "compilers", "science"]
+repository = "https://github.com/x1zzdev/x1zzLang"
+readme = "README.md"
 
 [[bin]]
 name = "x1zz"
@@ -44,7 +49,7 @@ name = "poc_correct_generated"
 required-features = ["poc-examples"]
 
 [dependencies]
-x1zz-compiler = { path = "x1zz-compiler" }
+x1zz-compiler = { version = "0.2.0", path = "x1zz-compiler" }
 clap = { version = "4.4", features = ["derive", "cargo"] }
 tokio = { version = "1.35", features = ["full"] }
 indicatif = { version = "0.17" }

@@ -4101,7 +4101,7 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 
 [[package]]
 name = "x1zz"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -4117,7 +4117,7 @@ dependencies = [
 
 [[package]]
 name = "x1zz-compiler"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "encoding_rs",
  "polars",
@@ -4127,7 +4127,7 @@ dependencies = [
 
 [[package]]
 name = "x1zz-sde"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",

@@ -13,43 +13,167 @@
 
 **겉은 스크립트, 속은 컴파일 | AI-Augmented Data Pipeline Language**
 
-![x1zzLang Benchmark](benches/x1zzLang_benchmark2.png)
-
-> **성능 스냅샷(Performance Snapshot):** `x1zzLang`은 340만 행의 워크로드 연산에서 데이터 파이프라인을 자동 병렬화가 내장된 최적화 Polars LazyFrame 실행 계획으로 컴파일함으로써, Pandas 대비 **3.84배의 속도 향상**을 달성합니다. *(시각적 워크플로우 인터페이스를 찾으시나요? [x1zzETL Visual IDE](https://github.com/x1zzdev/x1zzLang-visual-ide)를 확인해 보세요!)*
-
-> 💻 **"Python/Pandas 생태계가 데이터 사이언스계의 Microsoft Windows라면, 🍏 x1zzLang은 Apple Mac입니다."**
-> 
-> 강력한 코어 엔진(Rust + Polars)과 전용 컴파일러 OS(증분 컴파일 아키텍처)를 하나로 수직 통합했습니다. 복잡한 환경 설정의 스트레스를 완전히 지우고, 데이터 규모에 흔들리지 않는 압도적인 성능을 제공합니다.
-
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Language: .xzz](https://img.shields.io/badge/Language-.xzz-orange.svg)]()
 [![Backend: Rust + Polars](https://img.shields.io/badge/Backend-Rust%20%2B%20Polars-red.svg)]()
-[![Status: In Development](https://img.shields.io/badge/Status-In%20Development%20(2026)-yellow.svg)]()
+[![Crates.io](https://img.shields.io/badge/crates.io-x1zz-orange)](https://crates.io/crates/x1zz)
+[![Status: v0.2.0](https://img.shields.io/badge/Status-v0.2.0-green.svg)]()
 
 [English README](README.md)
 
 </div>
 
-```xzz
-// 이것이 전부다. import도, main()도, 보일러플레이트도 없다.
-type WelfareSchema = {
-  region:     string,
-  population: int,
-  income:     Option<float>,   // nullable — 공공 데이터 특성상 결측 가능
-  support:    bool,
-}
+---
 
-v data = load("welfare_2026.csv") :: WelfareSchema
+## 설치 (Installation)
 
-v blind_spots = data
-  |> filter(col("income") < 1_200_000)
-  |> filter(col("support") == false)
-  |> groupBy("region")
-  |> count("population")
-  |> orderBy("population", desc: true)
+```bash
+cargo install x1zz
 ```
 
-> *파일 상단부터 실행된다. 언어가 곧 분석이다.*
+> Rust 1.85+ 필요. [rustup.rs](https://rustup.rs)에서 설치.
+
+소스에서 빌드:
+
+```bash
+git clone https://github.com/x1zzdev/x1zzLang.git
+cd x1zzLang
+cargo build --release
+```
+
+---
+
+## 빠른 시작 (Quick Start)
+
+```bash
+x1zz new demo
+cd demo
+x1zz run example.xzz
+```
+
+예상 출력:
+
+```
+📊 [x1zz Execution Result: 'result' (Top 5 Rows)]
+────────────────────────────────────────────────────────────
+shape: (7, 4)
+┌───────────┬──────┬──────┬────────────┐
+│ station   ┆ pm10 ┆ pm25 ┆ date       │
+│ ---       ┆ ---  ┆ ---  ┆ ---        │
+│ str       ┆ f64  ┆ f64  ┆ str        │
+╞═══════════╪══════╪══════╪════════════╡
+│ Songpa    ┆ 68.1 ┆ 36.4 ┆ 2026-01-10 │
+│ Dobong    ┆ 55.9 ┆ 29.1 ┆ 2026-01-07 │
+│ Gangseo   ┆ 52.3 ┆ 28.4 ┆ 2026-01-02 │
+│ ...       ┆ ...  ┆ ...  ┆ ...        │
+└───────────┴──────┴──────┴────────────┘
+```
+
+CSV 내보내기:
+
+```bash
+x1zz run example.xzz --output result.csv
+```
+
+---
+
+## CLI
+
+```bash
+x1zz new   <프로젝트명>                        # 새 프로젝트 생성
+x1zz run   <파일.xzz>                         # 파이프라인 실행
+x1zz run   <파일.xzz> --output result.csv     # 실행 + CSV 저장
+x1zz run   <파일.xzz> --verbose               # 토큰 스트림 + AST 출력
+x1zz check <파일.xzz>                         # 정적 분석
+x1zz emit  rust <파일.xzz>                    # Rust 코드 출력
+x1zz import <데이터.csv>                      # 타입 정의 + load 문 자동 생성
+```
+
+---
+
+## 예제 (Examples)
+
+### 1. CSV 로드 + 필터 + 내보내기
+
+```xzz
+type AirQuality = {
+    station: string,
+    pm10: float,
+    pm25: float,
+    date: string,
+}
+
+v data = load("data/sample.csv") :: AirQuality
+
+v result = data
+    |> filter(col("pm10") > 40.0)
+    |> orderBy("pm10", desc: true)
+```
+
+```bash
+x1zz run example.xzz --output result.csv
+```
+
+---
+
+### 2. GroupBy + 평균 집계
+
+```xzz
+type SalesData = {
+    region: string,
+    product: string,
+    revenue: float,
+}
+
+v data = load("data/sales.csv") :: SalesData
+
+v by_region = data
+    |> groupBy("region")
+    |> mean("revenue")
+    |> orderBy("revenue", desc: true)
+```
+
+---
+
+### 3. 완전한 파이프라인 (Filter → GroupBy → Sum → Take)
+
+```xzz
+type WelfareSchema = {
+    region:     string,
+    population: int,
+    income:     Option<float>,
+    support:    bool,
+}
+
+v data = load("data/welfare_2026.csv") :: WelfareSchema
+
+v blind_spots = data
+    |> dropNull("income")
+    |> filter(col("income") < 1_200_000)
+    |> filter(col("support") == false)
+    |> groupBy("region")
+    |> count("population")
+    |> orderBy("population", desc: true)
+    |> take(10)
+```
+
+---
+
+### 4. 서울 대기질 파이프라인 (레포지토리 포함)
+
+```bash
+x1zz run examples/poc_script.xzz
+```
+
+`examples/` 디렉터리에 포함된 실제 서울 대기질 CSV 데이터를 사용합니다.
+
+---
+
+## 벤치마크 (Benchmark)
+
+![x1zzLang Benchmark](benches/x1zzLang_benchmark2.png)
+
+> **성능 스냅샷(Performance Snapshot):** `x1zzLang`은 340만 행의 워크로드 연산에서 데이터 파이프라인을 자동 병렬화가 내장된 최적화 Polars LazyFrame 실행 계획으로 컴파일함으로써, Pandas 대비 **3.84배의 속도 향상**을 달성합니다. *(시각적 워크플로우 인터페이스를 찾으시나요? [x1zzETL Visual IDE](https://github.com/x1zzdev/x1zzLang-visual-ide)를 확인해 보세요!)*
 
 ---
 
@@ -74,6 +198,66 @@ v blind_spots = data
 x1zzLang은 이 장벽을 **언어 설계 수준에서** 제거한다.  
 `filter`, `groupBy`, `mean`은 라이브러리 함수가 아니라 **언어 문법 그 자체**다.  
 복지 담당 공무원도, 환경 연구자도, 교통 정책 입안자도 — 데이터를 직접 분석할 수 있어야 한다.
+
+---
+
+```xzz
+// 이것이 전부다. import도, main()도, 보일러플레이트도 없다.
+type WelfareSchema = {
+  region:     string,
+  population: int,
+  income:     Option<float>,   // nullable — 공공 데이터 특성상 결측 가능
+  support:    bool,
+}
+
+v data = load("welfare_2026.csv") :: WelfareSchema
+
+v blind_spots = data
+  |> filter(col("income") < 1_200_000)
+  |> filter(col("support") == false)
+  |> groupBy("region")
+  |> count("population")
+  |> orderBy("population", desc: true)
+```
+
+> *파일 상단부터 실행된다. 언어가 곧 분석이다.*
+
+---
+
+## Compiler Architecture
+
+```
+x1zz-compiler
+│
+├── Lexer          — .xzz 소스 토크나이징
+├── Token          — 토큰 타입 정의
+├── Parser         — 재귀 하강 파서
+├── AST            — 추상 구문 트리 노드
+├── Type Checker   — 스키마 검증, 타입 추론
+├── Code Generator — Rust 트랜스파일러 (LazyFrame 코드 생성)
+└── Error          — 구조화된 컴파일 타임 진단
+```
+
+**파이프라인:**
+
+```
+.xzz source
+     │
+     ▼
+  Lexer  →  Token stream
+     │
+     ▼
+  Parser  →  AST
+     │
+     ▼
+  Type Checker (Schema + pipeline type inference)
+     │
+     ▼
+  Code Generator  →  Rust source
+     │
+     ▼
+  rustc + Polars LazyFrame  →  Native binary
+```
 
 ---
 
@@ -253,44 +437,6 @@ blind_spots |> plot.bar(x: "region", y: "population")
 
 ---
 
-## Compiler Architecture
-
-```
-x1zz-compiler
-│
-├── Lexer          — .xzz 소스 토크나이징
-├── Token          — 토큰 타입 정의
-├── Parser         — 재귀 하강 파서
-├── AST            — 추상 구문 트리 노드
-├── Type Checker   — 스키마 검증, 타입 추론
-├── Code Generator — Rust 트랜스파일러 (LazyFrame 코드 생성)
-└── Error          — 구조화된 컴파일 타임 진단
-```
-
-**파이프라인:**
-
-```
-.xzz source
-     │
-     ▼
-  Lexer  →  Token stream
-     │
-     ▼
-  Parser  →  AST
-     │
-     ▼
-  Type Checker (Schema + pipeline type inference)
-     │
-     ▼
-  Code Generator  →  Rust source
-     │
-     ▼
-  rustc + Polars LazyFrame  →  Native binary
-```
-
-
----
-
 ## Roadmap
 
 | Phase | 목표 | 핵심 구성요소 | 상태 |
@@ -303,6 +449,13 @@ x1zz-compiler
 ---
 
 ## 릴리스 노트
+
+### v0.2.0 — MVP 릴리스
+
+- `x1zz new` 명령이 즉시 실행 가능한 `example.xzz` + `data/sample.csv` 생성
+- `x1zz run --output result.csv`: CSV 내보내기 기능 추가
+- `cargo install x1zz` crates.io 배포
+- 시맨틱 버저닝 기준 버전 번프
 
 ### v0.17 — 디버그 억제 & 정규화 패치
 - `BoolLit` 지원: `col("support") == false` 등 필터 조건식 정상 평가
@@ -362,6 +515,7 @@ x1zzLang Visual IDE 개발 성공 — `.xzz` 파이프라인을 위한 그래픽
 | GroupBy / 집계 연산자 (sum, mean, min, max, count) | 구현 완료 (v0.16) |
 | OrderBy / Take / DropNull / FillNull | 구현 완료 (v0.16) |
 | BoolLit & col() 표현식 지원 | 구현 완료 (v0.17) |
+| CSV 내보내기 (`--output`) | 구현 완료 (v0.2.0) |
 | SDE (Synthetic Data Engine) | 구현 완료 |
 | NQP State Prediction (PoC) | 구현 완료 (dryrun) |
 | 벤치마크 스위트 (Pandas vs. x1zzLang) | 구현 완료 (v0.16) |
@@ -370,30 +524,6 @@ x1zzLang Visual IDE 개발 성공 — `.xzz` 파이프라인을 위한 그래픽
 | 증분 컴파일 | 예정 (Phase 2) |
 | NQP 모델 학습 | 예정 (Phase 3) |
 | MCP 서버 | Phase 4 |
-
----
-
-## Installation
-
-```bash
-# Phase 2 완료 후 공개 예정.
-# 현재 소스 빌드:
-git clone https://github.com/ax1sofficially-alt/x1zzLang.git
-cd x1zz-lang
-cargo build --release
-```
-
----
-
-## CLI
-
-```bash
-x1zz check  src/pipeline/analysis.xzz            # 타입·스키마 검사
-x1zz fmt    src/pipeline/analysis.xzz            # 포맷팅
-x1zz run    src/pipeline/analysis.xzz            # 실행
-x1zz run    src/pipeline/analysis.xzz --predict  # NQP 사전 예측 후 실행
-x1zz emit   rust src/pipeline/analysis.xzz       # Rust 코드 출력
-```
 
 ---
 

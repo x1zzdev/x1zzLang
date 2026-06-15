@@ -21,6 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             release,
             verbose,
             predict,
+            output,
         } => {
             let source_path = match file.to_str() {
                 Some(p) => p.to_owned(),
@@ -32,6 +33,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     std::process::exit(1);
                 }
             };
+
+            let output_csv: Option<String> = output
+                .as_ref()
+                .and_then(|p| p.to_str())
+                .map(String::from);
 
             // 파일 존재 여부 사전 확인
             if !file.exists() {
@@ -78,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // spawn_blocking 반환타입은 Send 를 요구하므로
             // Box<dyn Error> 대신 에러를 String 으로 변환해서 반환한다.
             let result = tokio::task::spawn_blocking(move || {
-                x1zz_compiler::runtime::run_pipeline(&source_path, verbose)
+                x1zz_compiler::runtime::run_pipeline(&source_path, verbose, output_csv.as_deref())
                     .map_err(|e| e.to_string())
             })
             .await

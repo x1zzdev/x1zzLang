@@ -174,7 +174,12 @@ fn df_to_json_array(
 /// .xzz 소스 파일 경로를 받아 전체 컴파일+런타임 파이프라인을 실행한다.
 ///
 /// - `verbose`: true 이면 Lexer 토큰 스트림과 AST 를 stdout 에 출력한다.
-pub fn run_pipeline(source_path: &str, verbose: bool) -> Result<(), Box<dyn std::error::Error>> {
+/// - `output_csv`: Some(path) 이면 마지막 DataFrame 결과를 CSV 파일로 저장한다.
+pub fn run_pipeline(
+    source_path: &str,
+    verbose: bool,
+    output_csv: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
     // ── STEP 1: 소스 파일 읽기 ───────────────────────────────────────────────
     let source = fs::read_to_string(source_path)
         .map_err(|e| format!("IO 에러: 파일 읽기 실패 '{}' — {}", source_path, e))?;
@@ -346,8 +351,38 @@ pub fn run_pipeline(source_path: &str, verbose: bool) -> Result<(), Box<dyn std:
                 "[x1zz:result] {}",
                 serde_json::to_string(&result_json).unwrap_or_default()
             );
+
+            // ── STEP 7: CSV Export (--output 플래그) ──────────────────────────
+            if let Some(csv_path) = output_csv {
+                match save_df_as_csv(df, csv_path) {
+                    Ok(_) => {
+                        println!();
+                        println!("💾 [x1zz] CSV 저장 완료: {}", csv_path);
+                    }
+                    Err(e) => {
+                        eprintln!("[x1zz] ⚠️  CSV 저장 실패: {}", e);
+                    }
+                }
+            }
         }
     }
+
+    Ok(())
+}
+
+// ── CSV 저장 헬퍼 ─────────────────────────────────────────────────────────────
+fn save_df_as_csv(
+    df: &polars::frame::DataFrame,
+    path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use polars::prelude::{CsvWriter, SerWriter};
+
+    let mut file = std::fs::File::create(path)
+        .map_err(|e| format!("CSV 파일 생성 실패 '{}' — {}", path, e))?;
+
+    CsvWriter::new(&mut file)
+        .finish(&mut df.clone())
+        .map_err(|e| format!("CSV 쓰기 실패 — {}", e))?;
 
     Ok(())
 }
