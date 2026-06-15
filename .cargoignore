@@ -1,9 +1,9 @@
-benches/
+benches
+cli_integration
+test
 examples/*.csv
-*.png
-*.html
-cli_integration/
-test/
-core_code.zip
+examples/*.png
+examples/*.html
 *.py
-__pycache__/
+__pycache__
+core_code.zip
