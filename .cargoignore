@@ -1,0 +1,9 @@
+examples/**/*.csv
+benches/**/*.png
+benches/**/*.html
+cli_integration/
+test/
+*.zip
+*.py
+__pycache__/
+core_code.zip
