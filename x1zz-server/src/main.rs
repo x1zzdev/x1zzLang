@@ -9,7 +9,6 @@
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::Duration;
 
 use axum::{
     Router,
@@ -145,7 +144,7 @@ async fn handle_execute(
 fn parse_stdout_markers(stdout: &str, stderr: &str) -> (Value, Value, Vec<String>) {
     let mut rows = json!([]);
     let mut schema = json!([]);
-    let mut logs: Vec<String> = stderr.lines().map(|l| l.to_string()).collect();
+    let logs: Vec<String> = stderr.lines().map(|l| l.to_string()).collect();
 
     for line in stdout.lines() {
         let trimmed = line.trim();

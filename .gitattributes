@@ -1,2 +1,5 @@
 benches/** linguist-vendored
 *.csv filter=lfs diff=lfs merge=lfs -text
+
+*.py linguist-detectable=false
+*.html linguist-detectable=false

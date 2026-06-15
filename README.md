@@ -400,10 +400,16 @@ x1zz emit   rust src/pipeline/analysis.xzz       # emit transpiled Rust source
 
 ## Contributing
 
-x1zzLang is open source.  
-Contributions are welcome across all areas: language design, Rust implementation, NQP model development, and public data pipeline examples.
+## Contributions & Notice
 
-Issues and pull requests on GitHub.
+`x1zzLang` is an open-source project, and we welcome all forms of feedback and interest.
+
+However, to comply with the **official regulations of the 8th Korea-CodeFair 2026 (ensuring pure self-development and research ethics)**, we are **temporarily suspending the acceptance of Pull Requests (code contributions) until the end of the finals in October 2026**. This measure is taken to prevent any ambiguity regarding authorship and to guarantee project integrity during the evaluation period.
+
+* **Issues (Suggestions & Bug Reports):** 🟢 Always welcome! Please feel free to open an issue for feature requests, bug reports, or conceptual discussions.
+* **Pull Requests (Code Contributions):** 🟡 Will be reopened after the final competition in October 2026.
+
+Thank you for your understanding and support for `x1zzLang`.
 
 ---
 
