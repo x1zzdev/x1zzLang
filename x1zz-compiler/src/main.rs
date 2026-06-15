@@ -26,7 +26,7 @@ fn main() {
     if input_path.to_lowercase().ends_with(".csv") {
         run_csv_benchmark(input_path, verbose);
     } else {
-        if let Err(e) = x1zz_compiler::runtime::run_pipeline(input_path, verbose) {
+        if let Err(e) = x1zz_compiler::runtime::run_pipeline(input_path, verbose, None) {
             eprintln!("{}", e);
             std::process::exit(1);
         }
@@ -103,7 +103,7 @@ v filled = raw
         std::process::exit(1);
     }
 
-    let result = x1zz_compiler::runtime::run_pipeline(&tmp_xzz_path, verbose);
+    let result = x1zz_compiler::runtime::run_pipeline(&tmp_xzz_path, verbose, None);
 
     // 임시 파일 정리 (결과와 무관하게 삭제)
     let _ = std::fs::remove_file(&tmp_xzz_path);
