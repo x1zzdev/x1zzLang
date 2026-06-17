@@ -78,7 +78,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          set -euo pipefail
+          
           $version  = "${{ github.ref_name }}"
           $platform = "${{ matrix.platform.name }}"
           $target   = "${{ matrix.platform.target }}"
