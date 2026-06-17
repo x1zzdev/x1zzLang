@@ -16,9 +16,9 @@ path = "src/main.rs"
 
 [dependencies]
 # 공유 핵심 타입
-x1zz-core     = { version = "0.2.0", path = "../x1zz-core" }
+x1zz-core     = { version = "0.2.1", path = "../x1zz-core" }
 # 컴파일러 (Lexer/Parser/Codegen) — Polars 없음
-x1zz-compiler = { version = "0.2.0", path = "../x1zz-compiler" }
+x1zz-compiler = { version = "0.2.1", path = "../x1zz-compiler" }
 
 # ── 무거운 런타임 의존성 (CLI 바이너리에 절대 포함되면 안 됨) ─────────────────
 polars = { version = "0.53", features = ["lazy", "csv", "strings", "regex"] }

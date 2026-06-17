@@ -11,7 +11,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 authors = ["Jangseowoo <ax1s.x1zz.com>"]
 license = "Apache-2.0"
@@ -20,7 +20,7 @@ repository = "https://github.com/x1zzdev/x1zzLang"
 # ── 루트 패키지 (x1zz CLI 바이너리) ─────────────────────────────────────────────
 [package]
 name = "x1zz"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 authors = ["Jangseowoo <ax1s.x1zz.com>"]
 license = "Apache-2.0"
@@ -66,7 +66,7 @@ required-features = ["poc-examples"]
 [dependencies]
 # 컴파일러 (Lexer/Parser/Codegen/Emitter) — Polars 없음
 # `emit` 명령어에서 emit_rust() 호출에 필요
-x1zz-compiler = { version = "0.2.0", path = "x1zz-compiler" }
+x1zz-compiler = { version = "0.2.1", path = "x1zz-compiler" }
 
 # CLI 인자 파싱
 clap = { version = "4.4", features = ["derive", "cargo"] }
