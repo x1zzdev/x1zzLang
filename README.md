@@ -33,9 +33,24 @@ A graphical editing and execution environment for `.xzz` pipelines.
 
 ---
 
+## 🔥 Get Started in 3 Commands
+
+```bash
+x1zz new my-project       # Scaffold project + sample CSV in seconds
+cd my-project
+x1zz import data.csv      # Auto-infer schema — type definitions generated instantly
+x1zz run analysis.xzz     # Execute pipeline + render chart
+```
+
+No Python. No pip install. No virtualenv. No manual schema typing.
+
+---
+
 ## Why x1zzLang?
 
 Data exists everywhere. Public datasets are published every year.
+
+**If Python/pandas is the Microsoft of data analysis, x1zzLang is the Apple.**
 
 The barrier is not data availability — it is analysis accessibility.
 
@@ -90,6 +105,54 @@ v data = load("data.csv") :: AirQuality
 | Library dependencies | `pandas`, `numpy` | None (built-in) |
 | Type validation | Runtime | Schema declaration |
 | Null handling | Manual | `Option<T>` |
+
+**Workflow difference:**  
+Python requires you to install dependencies, open files manually, infer column types by reading raw data, and handle nulls explicitly before writing a single analysis line.  
+x1zzLang starts from `x1zz import` — schema is inferred automatically, null-safety is declared in the type, and the pipeline is ready to run immediately.
+
+---
+
+## ⚡ Onboarding Workflow
+
+**Before — Python + pandas**
+
+```
+Install Python → pip install pandas numpy → create virtualenv
+→ Open CSV, inspect column names manually
+→ Write dtype mappings by hand
+→ Handle NaN values explicitly
+→ Write analysis code → run → debug runtime errors
+→ pip install matplotlib → write plotting code → run again
+```
+
+**After — x1zzLang**
+
+```bash
+x1zz new my-project    # Project + sample CSV created instantly
+cd my-project
+x1zz import data.csv   # Schema auto-inferred, type block written to main.xzz
+x1zz run analysis.xzz  # Pipeline executed + chart rendered
+```
+
+| Step | Before (pandas) | After (x1zzLang) |
+|------|----------------|-----------------|
+| Environment setup | pip, virtualenv, imports | None |
+| Schema declaration | Manual column inspection | `x1zz import` auto-generates |
+| Null handling | Explicit NaN checks | `Option<T>` in type definition |
+| Visualization | Separate matplotlib setup | `chart {}` block in pipeline |
+
+---
+
+## 🧠 Core UX Features
+
+| Feature | Description |
+|---------|-------------|
+| **Zero-setup execution** (`x1zz run`) | Single binary, no Python or library installation required |
+| **Auto Schema Inference** (`x1zz import`) | Reads CSV headers and samples → generates type definitions and `load` statements automatically. Supports EUC-KR (CP949) Korean CSVs |
+| **Declarative Pipeline DSL** (`\|>`) | `filter`, `groupBy`, `join`, `sort`, `withColumn` composed as a declarative pipe chain |
+| **Null-safe type system** (`Option<T>`) | Missing data declared as `Option<float>`, safely handled via `fillNull` |
+| **Built-in visualization** (`chart {}`) | Pipeline results rendered as bar, line, pie, or scatter charts — no extra library needed |
+| **One-command scaffolding** (`x1zz new`) | Generates sample CSV + runnable `example.xzz` + `x1zz.toml` project in one command |
 
 ---
 
