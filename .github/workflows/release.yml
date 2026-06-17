@@ -1,0 +1,265 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# x1zzLang — Production Release Pipeline
+#
+# Trigger : version tag push  (e.g. v0.2.1)
+# Jobs    : build (4-platform matrix)  →  release (single)
+#
+# Actions used (official only):
+#   actions/checkout@v4
+#   actions/cache@v4
+#   actions/upload-artifact@v4
+#   actions/download-artifact@v4
+#   + rustup / gh CLI  (pre-installed on all GitHub-hosted runners)
+# ─────────────────────────────────────────────────────────────────────────────
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 1 · build
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  build:
+    name: Build · ${{ matrix.platform.name }}
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name:        windows-x64
+            runner:      windows-latest
+            target:      x86_64-pc-windows-msvc
+            archive_ext: zip
+            bin_ext:     .exe
+
+          - name:        linux-x64
+            runner:      ubuntu-latest
+            target:      x86_64-unknown-linux-gnu
+            archive_ext: tar.gz
+            bin_ext:     ""
+
+          - name:        macos-x64
+            runner:      macos-13
+            target:      x86_64-apple-darwin
+            archive_ext: tar.gz
+            bin_ext:     ""
+
+          - name:        macos-arm64
+            runner:      macos-latest
+            target:      aarch64-apple-darwin
+            archive_ext: tar.gz
+            bin_ext:     ""
+
+    steps:
+      # ── 1. Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Rust stable + target ──────────────────────────────────────────────
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --no-self-update --profile minimal
+          rustup default stable
+          rustup target add ${{ matrix.platform.target }}
+
+      # ── 3. Cache: Cargo registry ─────────────────────────────────────────────
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: registry-${{ matrix.platform.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: registry-${{ matrix.platform.target }}-
+
+      # ── 4. Cache: build artifacts ────────────────────────────────────────────
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: build-${{ matrix.platform.target }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('src/**/*.rs', 'x1zz-*/src/**/*.rs') }}
+          restore-keys: |
+            build-${{ matrix.platform.target }}-${{ hashFiles('**/Cargo.lock') }}-
+            build-${{ matrix.platform.target }}-
+
+      # ── 5. Compile three binaries ────────────────────────────────────────────
+      - name: Build x1zz
+        run: cargo build --release --bin x1zz --target ${{ matrix.platform.target }}
+
+      - name: Build x1zz-runner
+        run: cargo build --release --bin x1zz-runner --target ${{ matrix.platform.target }}
+
+      - name: Build x1zz-exec
+        run: cargo build --release --bin x1zz-exec --target ${{ matrix.platform.target }}
+
+      # ── 6. Stage archive contents ────────────────────────────────────────────
+      #
+      # Archive internal layout (consistent across all platforms):
+      #
+      #   x1zz/
+      #   ├── x1zz[.exe]
+      #   ├── x1zz-runner[.exe]
+      #   ├── x1zz-exec[.exe]
+      #   ├── examples/          (if present)
+      #   └── config/            (if present)
+      #
+      - name: Stage release contents
+        shell: bash
+        run: |
+          EXT="${{ matrix.platform.bin_ext }}"
+          DIST="dist/x1zz"
+          mkdir -p "${DIST}"
+
+          cp "target/${{ matrix.platform.target }}/release/x1zz${EXT}"        "${DIST}/"
+          cp "target/${{ matrix.platform.target }}/release/x1zz-runner${EXT}" "${DIST}/"
+          cp "target/${{ matrix.platform.target }}/release/x1zz-exec${EXT}"   "${DIST}/"
+
+          [ -d examples ] && cp -r examples "${DIST}/examples"
+          [ -d config   ] && cp -r config   "${DIST}/config"
+
+      # ── 7a. Package · Windows → .zip ─────────────────────────────────────────
+      - name: Package (Windows zip)
+        if: matrix.platform.archive_ext == 'zip'
+        shell: pwsh
+        run: |
+          $version  = "${{ github.ref_name }}"
+          $platform = "${{ matrix.platform.name }}"
+          $out      = "x1zz-${version}-${platform}.zip"
+
+          Compress-Archive -Path "dist\x1zz" -DestinationPath $out
+          "ARCHIVE=${out}" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # ── 7b. Package · Unix → .tar.gz ─────────────────────────────────────────
+      - name: Package (Unix tar.gz)
+        if: matrix.platform.archive_ext == 'tar.gz'
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          PLATFORM="${{ matrix.platform.name }}"
+          OUT="x1zz-${VERSION}-${PLATFORM}.tar.gz"
+
+          tar -czf "${OUT}" -C dist x1zz
+          echo "ARCHIVE=${OUT}" >> "$GITHUB_ENV"
+
+      # ── 8. Upload artifact ───────────────────────────────────────────────────
+      - name: Upload archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: archive-${{ matrix.platform.name }}
+          path: ${{ env.ARCHIVE }}
+          retention-days: 1
+          if-no-files-found: error
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 2 · release
+# ─────────────────────────────────────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout (for release notes) ──────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── 2. Download all platform archives ────────────────────────────────────
+      - name: Download archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: archive-*
+          merge-multiple: true
+          path: release/
+
+      # ── 3. Validate all 4 archives are present ───────────────────────────────
+      - name: Validate artifacts
+        run: |
+          echo "── release/ contents ──────────────────────────"
+          ls -lh release/
+
+          for suffix in "windows-x64.zip" "linux-x64.tar.gz" "macos-x64.tar.gz" "macos-arm64.tar.gz"; do
+            found=$(ls release/ | grep "${suffix}" || true)
+            if [ -z "${found}" ]; then
+              echo "MISSING: *${suffix}" >&2
+              exit 1
+            fi
+            echo "OK: ${found}"
+          done
+
+      # ── 4. Generate SHA-256 checksums ────────────────────────────────────────
+      - name: Generate checksums
+        run: |
+          cd release
+          sha256sum * > checksums.sha256
+          echo "── checksums ──────────────────────────────────"
+          cat checksums.sha256
+
+      # ── 5. Generate release notes from git log ───────────────────────────────
+      - name: Generate release notes
+        run: |
+          VERSION="${{ github.ref_name }}"
+          PREV=$(git tag --sort=-version:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+            | grep -v "^${VERSION}$" \
+            | head -1)
+
+          {
+            echo "## What's Changed"
+            echo ""
+            if [ -n "${PREV}" ]; then
+              git log --pretty=format:"- %s (%h)" "${PREV}..HEAD"
+            else
+              git log --pretty=format:"- %s (%h)" HEAD
+            fi
+            echo ""
+            echo ""
+            echo "---"
+            echo ""
+            echo "## Included Binaries"
+            echo ""
+            echo "| Binary | Role |"
+            echo "|--------|------|"
+            echo "| \`x1zz\` | CLI entry point |"
+            echo "| \`x1zz-runner\` | IPC bridge |"
+            echo "| \`x1zz-exec\` | Polars-powered runtime engine |"
+            echo ""
+            echo "## Installation"
+            echo ""
+            echo "1. Download the archive for your platform"
+            echo "2. Extract — all binaries land in \`x1zz/\`"
+            echo "3. Add \`x1zz/\` to your \`PATH\`"
+            echo "4. Run \`x1zz --help\`"
+            echo ""
+            echo "> ⚠️ All three binaries must remain in the same directory."
+          } > release_notes.md
+
+      # ── 6. Create GitHub Release ─────────────────────────────────────────────
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+
+          PRERELEASE=""
+          echo "${VERSION}" | grep -q '-' && PRERELEASE="--prerelease"
+
+          gh release create "${VERSION}" \
+            --title "x1zzLang ${VERSION}" \
+            --notes-file release_notes.md \
+            ${PRERELEASE} \
+            release/*.zip \
+            release/*.tar.gz \
+            release/checksums.sha256
