@@ -1,17 +1,18 @@
 [workspace]
 
 members = [
-    "x1zz-core",
-    "x1zz-compiler",
-    "x1zz-exec",
-    "x1zz-runner",
-    "x1zz-sde",
-    "x1zz-server",
+  "x1zz-core",
+  "x1zz-compiler",
+  "x1zz-runner",
+  "x1zz-exec",
+  "x1zz-server"
 ]
 resolver = "2"
 
+
+
 [workspace.package]
-version = "0.2.1"
+version = "0.2.3"
 edition = "2024"
 authors = ["Jangseowoo <ax1s.x1zz.com>"]
 license = "Apache-2.0"
@@ -20,7 +21,7 @@ repository = "https://github.com/x1zzdev/x1zzLang"
 # ── 루트 패키지 (x1zz CLI 바이너리) ─────────────────────────────────────────────
 [package]
 name = "x1zz"
-version = "0.2.1"
+version = {workspace = true}
 edition = "2024"
 authors = ["Jangseowoo <ax1s.x1zz.com>"]
 license = "Apache-2.0"
