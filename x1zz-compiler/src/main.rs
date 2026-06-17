@@ -1,16 +1,13 @@
-// x1zz-compiler/src/main.rs  (v0.17)
+// x1zz-compiler/src/main.rs  (v0.18 → compile-only)
 //
-// 컴파일러 직접 실행 엔트리포인트.
+// 컴파일러 직접 실행 엔트리포인트 — 파싱 + AST 출력 전용.
 //
-// 지원되는 두 가지 입력 모드:
-//   1. .xzz 소스 파일  →  기존 컴파일+런타임 파이프라인
-//   2. .csv 데이터 파일 →  벤치마크 파이프라인 .xzz 자동 생성 후 즉시 실행
+// ⚠️  런타임 실행(Polars pipeline)은 x1zz-runner 바이너리를 사용하세요.
+//     이 바이너리는 컴파일 단계(Lexer → Parser → Codegen)만 수행합니다.
 //
 // 사용 예:
 //   cargo run -p x1zz-compiler -- examples/poc_script.xzz
-//   cargo run --release -p x1zz-compiler -- benches/data/scale_large.csv
-
-use std::path::Path;
+//   cargo run -p x1zz-compiler -- examples/poc_script.xzz --verbose
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -19,97 +16,66 @@ fn main() {
         .map(String::as_str)
         .unwrap_or("examples/poc_script.xzz");
 
-    // ── CSV 직접 입력 감지: 벤치마크 파이프라인 자동 생성 ───────────────────────
-    // --verbose / -v 플래그 감지
     let verbose = args.iter().any(|a| a == "--verbose" || a == "-v");
 
-    if input_path.to_lowercase().ends_with(".csv") {
-        run_csv_benchmark(input_path, verbose);
-    } else {
-        if let Err(e) = x1zz_compiler::runtime::run_pipeline(input_path, verbose, None) {
-            eprintln!("{}", e);
+    // ── 소스 파일 읽기 ──────────────────────────────────────────────────────
+    let source = match std::fs::read_to_string(input_path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("[x1zz-compiler] IO 에러: '{}' — {}", input_path, e);
             std::process::exit(1);
         }
-    }
-}
-
-/// CSV 경로를 받아 벤치마크용 .xzz 스크립트를 임시 파일로 생성한 뒤
-/// run_pipeline()으로 실행하고 임시 파일을 정리한다.
-fn run_csv_benchmark(csv_path: &str, verbose: bool) {
-    // 크로스 플랫폼: 백슬래시 → 슬래시
-    let posix_path = csv_path.replace('\\', "/");
-
-    let xzz_source = format!(
-        r#"// x1zzLang Benchmark Pipeline — auto-generated from CSV input
-//
-// Pipeline stages matching the Pandas baseline (pandas_pipeline.py):
-//   P2: dropNull(pm10) | filter pm10<120 & pm25>10
-//   P3: groupBy(station) -> sum(pm10)
-//   P4: groupBy(station) -> mean(pm10) -> sort desc -> take(10)
-//   P7: fillNull(pm25,0) | filter pm10>50 -> groupBy -> count -> top5
-
-type AirQuality = {{
-  date: string,
-  station: string,
-  pm10: Option<float>,
-  pm25: Option<float>,
-}};
-
-v raw = load("{posix_path}") :: AirQuality
-  |> select([date, station, pm10, pm25]);
-
-v cleaned = raw
-  |> dropNull("pm10")
-  |> filter(col("pm10") < 120)
-  |> filter(col("pm25") > 10);
-
-v by_station = cleaned
-  |> groupBy("station")
-  |> sum("pm10");
-
-v top10_mean = cleaned
-  |> groupBy("station")
-  |> mean("pm10")
-  |> orderBy("pm10", desc: true)
-  |> take(10);
-
-v filled = raw
-  |> fillNull("pm25", 0)
-  |> filter(col("pm10") > 50)
-  |> groupBy("station")
-  |> count("pm25")
-  |> orderBy("pm25", desc: true)
-  |> take(5);
-"#,
-        posix_path = posix_path
-    );
-
-    // 임시 .xzz 파일 경로: 원본 CSV와 동일한 디렉터리에 생성
-    let tmp_xzz_path = if let Some(parent) = Path::new(csv_path).parent() {
-        let stem = Path::new(csv_path)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("benchmark");
-        parent
-            .join(format!("_{}_bench.xzz", stem))
-            .to_string_lossy()
-            .to_string()
-    } else {
-        format!("_{}_bench.xzz", csv_path)
     };
 
-    if let Err(e) = std::fs::write(&tmp_xzz_path, &xzz_source) {
-        eprintln!("[ERROR] 임시 .xzz 파일 생성 실패: {} — {}", tmp_xzz_path, e);
-        std::process::exit(1);
+    eprintln!("[x1zz-compiler] 입력: {}  ({} bytes)", input_path, source.len());
+
+    // ── Lexer ────────────────────────────────────────────────────────────────
+    let mut lexer = x1zz_compiler::Lexer::new(&source);
+    let tokens = match lexer.tokenize() {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("[x1zz-compiler LEXER ERROR] {}", e);
+            std::process::exit(1);
+        }
+    };
+    eprintln!("[x1zz-compiler] Lexer 완료: {} 토큰", tokens.len());
+
+    if verbose {
+        println!("\n⚡ STEP 1. Tokenized Stream");
+        println!("{}", "─".repeat(60));
+        for token in &tokens {
+            println!(
+                "  [{:>4}:{:<3}] {:?}",
+                token.span.line, token.span.col, token.kind
+            );
+        }
     }
 
-    let result = x1zz_compiler::runtime::run_pipeline(&tmp_xzz_path, verbose, None);
+    // ── Parser ───────────────────────────────────────────────────────────────
+    let mut parser = x1zz_compiler::Parser::new(tokens);
+    let program = match parser.parse() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("[x1zz-compiler PARSER ERROR] {}", e);
+            std::process::exit(1);
+        }
+    };
+    eprintln!("[x1zz-compiler] Parser 완료: {} AST 노드", program.stmts.len());
 
-    // 임시 파일 정리 (결과와 무관하게 삭제)
-    let _ = std::fs::remove_file(&tmp_xzz_path);
-
-    if let Err(e) = result {
-        eprintln!("{}", e);
-        std::process::exit(1);
+    if verbose {
+        println!("\n⚡ STEP 2. Abstract Syntax Tree");
+        println!("{}", "─".repeat(60));
+        for (i, stmt) in program.stmts.iter().enumerate() {
+            println!("  [{}] {:#?}", i, stmt);
+        }
     }
+
+    // ── Codegen ──────────────────────────────────────────────────────────────
+    let codegen_output = x1zz_compiler::Codegen::generate(&program);
+    println!("\n⚡ STEP 3. Codegen Output");
+    println!("{}", "─".repeat(60));
+    println!("{}", codegen_output);
+
+    eprintln!("[x1zz-compiler] 컴파일 완료");
+    eprintln!("[x1zz-compiler] ℹ️  실행(run)은 'x1zz run {}' 를 사용하세요.", input_path);
 }

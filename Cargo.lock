@@ -4111,7 +4111,6 @@ dependencies = [
  "indicatif 0.17.11",
  "serde",
  "serde_json",
- "tokio",
  "x1zz-compiler",
 ]
 
@@ -4119,8 +4118,34 @@ dependencies = [
 name = "x1zz-compiler"
 version = "0.2.0"
 dependencies = [
+ "serde",
+ "serde_json",
+ "x1zz-core",
+]
+
+[[package]]
+name = "x1zz-core"
+version = "0.2.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "x1zz-exec"
+version = "0.2.0"
+dependencies = [
  "encoding_rs",
  "polars",
+ "serde",
+ "serde_json",
+ "x1zz-compiler",
+ "x1zz-core",
+]
+
+[[package]]
+name = "x1zz-runner"
+version = "0.2.0"
+dependencies = [
  "serde",
  "serde_json",
 ]

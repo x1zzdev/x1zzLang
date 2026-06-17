@@ -6,16 +6,17 @@ mod ux;
 
 use clap::Parser;
 use cli::{Cli, Commands};
-use tokio::time::{Duration, sleep};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
-        // ── run: .xzz 데이터 분석 코드 실행 (또는 NQP 예측) ────────────────
-        //   기본: Lexer → Parser → TypeChecker → Runtime (Polars LazyFrame 체인)
-        //   --predict: 코드 실행 없이 NQP 모델로 시맨틱 결과 예측
+        // ── run: .xzz 데이터 분석 코드 실행 ──────────────────────────────────
+        //
+        // ⚠️  아키텍처 원칙 (바이너리 크기 최소화):
+        //   CLI 바이너리는 Polars/Tokio를 링크하지 않는다.
+        //   run 명령어는 x1zz-runner 서브프로세스를 스폰해 실행을 위임한다.
+        //   통신: CLI args만 사용 (별도 IPC 불필요)
         Commands::Run {
             file,
             release,
@@ -34,12 +35,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
-            let output_csv: Option<String> = output
-                .as_ref()
-                .and_then(|p| p.to_str())
-                .map(String::from);
-
-            // 파일 존재 여부 사전 확인
             if !file.exists() {
                 eprintln!(
                     "[x1zz IO 에러]\n\
@@ -53,51 +48,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             // ── --predict 분기: NQP 시맨틱 예측 모드 ───────────────────────
+            // predict는 Polars를 사용하지 않으므로 CLI에서 직접 처리한다.
             if predict {
-                // predict::run_predict 는 내부적으로 Python 서브프로세스를
-                // spawn_blocking 없이 동기로 호출해도 무방 (Tokio IO 미사용).
-                // 그러나 wait_with_output() 블로킹 호출이 있으므로
-                // spawn_blocking 스레드에서 실행한다.
-                let result =
-                    tokio::task::spawn_blocking(move || predict::run_predict(&source_path))
-                        .await
-                        .unwrap_or_else(|e| Err(format!("스레드 패닉: {:?}", e)));
-
-                if let Err(e) = result {
+                if let Err(e) = predict::run_predict(&source_path) {
                     eprintln!("{}", e);
                     std::process::exit(1);
                 }
                 return Ok(());
             }
 
-            // ── 일반 런타임 실행 분기 ────────────────────────────────────────
             if release {
                 println!("🚀  릴리즈 모드 (Polars 최적화 플래그 활성화)");
                 println!();
             }
 
-            // x1zz-compiler 런타임 파이프라인 호출
-            // ⚠ run_pipeline 은 Polars collect() 등 블로킹 작업을 포함하므로
-            //   Tokio 비동기 컨텍스트 내부에서 직접 호출하면 "Cannot start a runtime
-            //   from within a runtime" 패닉이 발생한다.
-            //   → spawn_blocking 으로 Tokio 전용 블로킹 스레드 풀에서 실행한다.
-            // spawn_blocking 반환타입은 Send 를 요구하므로
-            // Box<dyn Error> 대신 에러를 String 으로 변환해서 반환한다.
-            let result = tokio::task::spawn_blocking(move || {
-                x1zz_compiler::runtime::run_pipeline(&source_path, verbose, output_csv.as_deref())
-                    .map_err(|e| e.to_string())
-            })
-            .await
-            .unwrap_or_else(|e| Err(format!("스레드 패닉: {:?}", e)));
+            // ── x1zz-runner 서브프로세스 스폰 ────────────────────────────────
+            // Polars/Tokio는 x1zz-runner 바이너리에만 링크되며,
+            // 이 CLI 바이너리의 크기에 영향을 주지 않는다.
+            let runner = find_runner()?;
+            let mut cmd = std::process::Command::new(&runner);
+            cmd.arg(&source_path);
+            if verbose {
+                cmd.arg("--verbose");
+            }
+            if let Some(ref out) = output {
+                if let Some(out_str) = out.to_str() {
+                    cmd.arg("--output").arg(out_str);
+                }
+            }
 
-            if let Err(e) = result {
-                eprintln!("{}", e);
-                std::process::exit(1);
+            let status = cmd.status().map_err(|e| {
+                format!(
+                    "x1zz-runner 실행 실패: {}\n\
+                     → 'x1zz-runner' 바이너리가 PATH 또는 x1zz 실행 파일과 같은 디렉토리에 있는지 확인하세요.",
+                    e
+                )
+            })?;
+
+            if !status.success() {
+                std::process::exit(status.code().unwrap_or(1));
             }
         }
 
         // ── emit: .xzz → 타겟 언어 변환 출력 ──────────────────────────────
-        //   현재 지원 형식: rust (독립 Rust + Polars 소스 파일 생성)
+        // emit은 Polars 없이 컴파일러만 사용하므로 CLI에서 직접 처리한다.
         Commands::Emit { format, file, out } => {
             let source_path = match file.to_str() {
                 Some(p) => p.to_owned(),
@@ -107,7 +101,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
-            // 파일 존재 여부 사전 확인
             if !file.exists() {
                 eprintln!(
                     "[x1zz IO 에러]\n\
@@ -122,7 +115,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             match format.to_lowercase().as_str() {
                 "rust" => {
-                    // out 경로가 있으면 파일로, 없으면 stdout
                     let out_path = out.as_ref().and_then(|p| p.to_str()).map(String::from);
 
                     println!(
@@ -132,21 +124,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                     println!();
 
-                    // emit_rust 도 파일 I/O + 파싱 블로킹 작업이므로 spawn_blocking 사용
-                    // Box<dyn Error> 는 Send 불가 → String 으로 변환해서 반환
-                    let out_path_owned = out_path.clone();
-                    let source_path_owned = source_path.clone();
-                    let emit_result = tokio::task::spawn_blocking(move || {
-                        x1zz_compiler::emitter::emit_rust(
-                            &source_path_owned,
-                            out_path_owned.as_deref(),
-                        )
-                        .map_err(|e| e.to_string())
-                    })
-                    .await
-                    .unwrap_or_else(|e| Err(format!("스레드 패닉: {:?}", e)));
-
-                    if let Err(e) = emit_result {
+                    if let Err(e) = x1zz_compiler::emitter::emit_rust(
+                        &source_path,
+                        out_path.as_deref(),
+                    ) {
                         eprintln!("{}", e);
                         std::process::exit(1);
                     }
@@ -171,7 +152,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("🔍  정적 분석을 시작합니다 …  ({})", file.display());
 
             let spinner = ux::create_spinner("sLM Neural Query Planner 분석 중 …");
-            sleep(Duration::from_millis(1_200)).await;
+            // tokio::time::sleep 제거 → std::thread::sleep 사용
+            std::thread::sleep(std::time::Duration::from_millis(1_200));
             spinner.finish_and_clear();
 
             let file_name = file
@@ -209,4 +191,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+// ── x1zz-runner 바이너리 탐색 ────────────────────────────────────────────────
+//
+// 탐색 순서:
+//   1. 현재 x1zz 실행 파일과 같은 디렉토리
+//   2. PATH에서 찾기 (OS가 Command::new에서 자동 처리)
+fn find_runner() -> Result<std::path::PathBuf, String> {
+    // 1. 현재 실행 파일 옆에서 탐색
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            #[cfg(windows)]
+            let candidate = dir.join("x1zz-runner.exe");
+            #[cfg(not(windows))]
+            let candidate = dir.join("x1zz-runner");
+
+            if candidate.exists() {
+                return Ok(candidate);
+            }
+        }
+    }
+
+    // 2. PATH에서 탐색 (OS 위임)
+    Ok(std::path::PathBuf::from("x1zz-runner"))
 }
