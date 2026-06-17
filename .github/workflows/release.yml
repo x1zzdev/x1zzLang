@@ -95,13 +95,13 @@ jobs:
 
       # ── 5. Compile three binaries ────────────────────────────────────────────
       - name: Build x1zz
-        run: cargo build --release --bin x1zz --target ${{ matrix.platform.target }}
+        run: cargo build --release -p x1zz --target ${{ matrix.platform.target }}
 
       - name: Build x1zz-runner
-        run: cargo build --release --bin x1zz-runner --target ${{ matrix.platform.target }}
+        run: cargo build --release -p x1zz-runner --target ${{ matrix.platform.target }}
 
       - name: Build x1zz-exec
-        run: cargo build --release --bin x1zz-exec --target ${{ matrix.platform.target }}
+        run: cargo build --release -p x1zz-exec --target ${{ matrix.platform.target }}
 
       # ── 6. Stage archive contents ────────────────────────────────────────────
       #
@@ -191,7 +191,7 @@ jobs:
           ls -lh release/
 
           for suffix in "windows-x64.zip" "linux-x64.tar.gz" "macos-x64.tar.gz" "macos-arm64.tar.gz"; do
-            found=$(ls release/ | grep "${suffix}" || true)
+            found=$(test -f release/*windows-x64.zip test -f release/*linux-x64.tar.gz)
             if [ -z "${found}" ]; then
               echo "MISSING: *${suffix}" >&2
               exit 1

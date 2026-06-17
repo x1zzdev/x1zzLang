@@ -3874,7 +3874,7 @@ checksum = "1ffae5123b2d3fc086436f8834ae3ab053a283cfac8fe0a0b8eaae044768a4c4"
 
 [[package]]
 name = "x1zz"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "anyhow",
  "clap",
@@ -3889,7 +3889,7 @@ dependencies = [
 
 [[package]]
 name = "x1zz-compiler"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -3898,14 +3898,14 @@ dependencies = [
 
 [[package]]
 name = "x1zz-core"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "x1zz-exec"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "encoding_rs",
  "polars",
@@ -3917,7 +3917,7 @@ dependencies = [
 
 [[package]]
 name = "x1zz-runner"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "serde",
  "serde_json",
