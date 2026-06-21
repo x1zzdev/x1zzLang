@@ -25,7 +25,7 @@ jobs:
       - name: Install Rust stable
         shell: bash
         run: |
-          rustup toolchain install stable --no-self-update --profile minimal --component rustfmt clippy
+          rustup toolchain install stable --no-self-update --profile minimal --component rustfmt --component clippy
           rustup default stable
 
       - name: Cache Cargo registry
