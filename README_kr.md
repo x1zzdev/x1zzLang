@@ -110,7 +110,7 @@ x1zz run main.xzz      # 컴파일 + 파이프라인 실행
 
 `chart {}` 블록이 포함된 파이프라인을 실행하면 HTML 차트로 결과를 렌더링한다.
 
-![x1zzLang Benchmark](benches/x1zzLang_benchmark2.png)
+![x1zzLang chart](screenshot_result_chart.png)
 
 > *예시: 파이프라인 실행 결과를 bar 차트로 렌더링. 차트 출력은 HTML 파일로 저장된다.*
 

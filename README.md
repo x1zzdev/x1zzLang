@@ -109,7 +109,7 @@ x1zz run main.xzz      # compile + execute pipeline
 
 After running a pipeline with a `chart {}` block, x1zzLang renders the result as an HTML chart:
 
-![x1zzLang Benchmark](benches/x1zzLang_benchmark2.png)
+![x1zzLang chart](screenshot_result_chart.png)
 
 > *Example: pipeline execution result rendered as a bar chart. Chart output is written to an HTML file.*
 
