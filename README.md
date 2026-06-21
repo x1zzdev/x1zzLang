@@ -12,6 +12,7 @@
 # x1zzLang
 
 **A DSL platform that lets non-experts perform data analysis without writing code.**
+*Scripting on the surface. Compiled at its core.*
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Language: .xzz](https://img.shields.io/badge/Language-.xzz-orange.svg)]()
@@ -156,19 +157,7 @@ x1zz run analysis.xzz  # Pipeline executed + chart rendered
 
 ---
 
-## Features
 
-| Feature | Description |
-|---------|-------------|
-| CSV loading | File ingestion |
-| Filtering | Conditional filtering |
-| Aggregation | Grouped statistics |
-| Visualization | Result rendering |
-| Compiler pipeline | DSL → IR transformation |
-| Visual IDE | GUI editor |
-| Runtime execution | Polars engine |
-
----
 
 ## Example
 
@@ -191,15 +180,16 @@ v data = load("data.csv") :: AirQuality
 x1zz run analysis.xzz
 ```
 
----
 
+
+---
 ## Installation
 
 ### 1. Download Release
 
 Download the latest release from:
 
-**[https://github.com/x1zzdev/x1zzLang/releases](https://github.com/x1zzdev/x1zzLang/releases)**
+[Releases](https://github.com/x1zzdev/x1zzLang/releases)
 
 ### 2. Extract
 
@@ -225,47 +215,48 @@ x1zz --version
 
 ---
 
-## Quick Start
+## Technical Deep Dive
 
-```bash
-# 1. Download and extract the release package
-# 2. Run a pipeline
-x1zz run <file>
-# 3. View output in the terminal
-```
+Interested in how x1zzLang works internally?
 
----
+Topics covered:
 
-## Architecture
+- Compiler Architecture
+- Type System
+- Runtime Design
+- Neural Query Planner (NQP)
+- Synthetic Data Engine (SDE)
 
-> ⚠️ Conceptual overview only.
+→ **[Architecture Overview](docs/architecture.md)**
 
-```
-x1zz-cli
-├── x1zz-core
-└── x1zz-compiler
-
-x1zz-runner
-└── IPC Bridge
-
-x1zz-exec
-└── Polars Runtime
-```
 
 ---
+
+
+
+
+
+
+
 
 ## Benchmark
 
 ![x1zzLang Benchmark](benches/x1zzLang_benchmark2.png)
 
-> *Benchmark: x1zzLang pipeline execution vs. equivalent Pandas pipeline.*
+> *Benchmark: x1zzLang achieved up to 3.84× faster execution than an equivalent Pandas pipeline on a 3.4M-row workload.*
 
 ---
 
 ## Current Status
 
-**Active Development**
-
+| Component | Status |
+|------------|----------|
+| CLI | Stable |
+| Compiler | Stable |
+| Visual IDE | Stable |
+| Type System | Stable |
+| NQP (Prediction Layer) | Experimental |
+| SDE (Synthetic Data Engine) | Experimental |
 ---
 
 ## Roadmap
