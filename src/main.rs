@@ -124,10 +124,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                     println!();
 
-                    if let Err(e) = x1zz_compiler::emitter::emit_rust(
-                        &source_path,
-                        out_path.as_deref(),
-                    ) {
+                    if let Err(e) =
+                        x1zz_compiler::emitter::emit_rust(&source_path, out_path.as_deref())
+                    {
                         eprintln!("{}", e);
                         std::process::exit(1);
                     }
@@ -171,11 +170,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("[Preview] x1zz sde — Synthetic Data Engine");
             println!("  이 기능은 현재 Preview 상태입니다. CLI 통합이 진행 중입니다.");
             println!();
-            println!(
-                "  rows: {}  │  output: {}",
-                rows,
-                output.display()
-            );
+            println!("  rows: {}  │  output: {}", rows, output.display());
             println!("  x1zz-sde 엔진 연동 예정.");
         }
 

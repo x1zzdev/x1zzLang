@@ -296,8 +296,7 @@ pub fn run_pipeline(
             // ── [x1zz:result] JSON 마커 ──────────────────────────────────────
             let api_limit = df.height().min(500);
             let api_df = df.head(Some(api_limit));
-            let api_rows = df_to_json_array(&api_df)
-                .unwrap_or(serde_json::Value::Array(vec![]));
+            let api_rows = df_to_json_array(&api_df).unwrap_or(serde_json::Value::Array(vec![]));
             let api_schema: Vec<serde_json::Value> = df
                 .get_column_names()
                 .iter()
@@ -309,8 +308,7 @@ pub fn run_pipeline(
                     serde_json::json!({ "name": n.to_string(), "type": dtype_str })
                 })
                 .collect();
-            let result_json =
-                serde_json::json!({ "rows": api_rows, "schema": api_schema });
+            let result_json = serde_json::json!({ "rows": api_rows, "schema": api_schema });
             println!(
                 "[x1zz:result] {}",
                 serde_json::to_string(&result_json).unwrap_or_default()

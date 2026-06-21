@@ -8,7 +8,6 @@
 /// 의존성 그래프:
 ///   x1zz (CLI)   → x1zz-compiler (NO Polars) ✓
 ///   x1zz-runner  → x1zz-exec → Polars        ✓ (분리된 바이너리)
-
 pub mod runtime;
 
 pub use runtime::run_pipeline;

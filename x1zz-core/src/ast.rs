@@ -244,3 +244,137 @@ impl Default for Program {
         Program::new()
     }
 }
+
+// ── AST 유닛 테스트 ───────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── JoinHow 테스트 ────────────────────────────────────────────────────────
+
+    /// JoinHow::from_str — 유효한 문자열 4종
+    #[test]
+    fn test_join_how_from_str_valid() {
+        assert_eq!(JoinHow::from_str("inner"), Some(JoinHow::Inner));
+        assert_eq!(JoinHow::from_str("left"), Some(JoinHow::Left));
+        assert_eq!(JoinHow::from_str("outer"), Some(JoinHow::Outer));
+        assert_eq!(JoinHow::from_str("cross"), Some(JoinHow::Cross));
+    }
+
+    /// JoinHow::from_str — 유효하지 않은 문자열 → None
+    #[test]
+    fn test_join_how_from_str_invalid() {
+        assert_eq!(JoinHow::from_str("hash"), None);
+        assert_eq!(JoinHow::from_str("INNER"), None); // 대소문자 구분
+        assert_eq!(JoinHow::from_str(""), None);
+        assert_eq!(JoinHow::from_str("full"), None);
+    }
+
+    /// JoinHow::default() → Inner
+    #[test]
+    fn test_join_how_default_is_inner() {
+        assert_eq!(JoinHow::default(), JoinHow::Inner);
+    }
+
+    /// JoinHow::as_polars_str — Polars 타입 문자열 매핑 검증
+    #[test]
+    fn test_join_how_as_polars_str() {
+        assert_eq!(JoinHow::Inner.as_polars_str(), "JoinType::Inner");
+        assert_eq!(JoinHow::Left.as_polars_str(), "JoinType::Left");
+        assert_eq!(JoinHow::Outer.as_polars_str(), "JoinType::Full");
+        assert_eq!(JoinHow::Cross.as_polars_str(), "JoinType::Cross");
+    }
+
+    // ── ChartType 테스트 ──────────────────────────────────────────────────────
+
+    /// ChartType::from_str — 유효한 문자열 4종
+    #[test]
+    fn test_chart_type_from_str_valid() {
+        assert_eq!(ChartType::from_str("bar"), Some(ChartType::Bar));
+        assert_eq!(ChartType::from_str("line"), Some(ChartType::Line));
+        assert_eq!(ChartType::from_str("pie"), Some(ChartType::Pie));
+        assert_eq!(ChartType::from_str("scatter"), Some(ChartType::Scatter));
+    }
+
+    /// ChartType::from_str — 유효하지 않은 문자열 → None
+    #[test]
+    fn test_chart_type_from_str_invalid() {
+        assert_eq!(ChartType::from_str("heatmap"), None);
+        assert_eq!(ChartType::from_str("Bar"), None); // 대소문자 구분
+        assert_eq!(ChartType::from_str(""), None);
+        assert_eq!(ChartType::from_str("radar"), None);
+    }
+
+    /// ChartType::as_str — 소문자 문자열 반환 검증
+    #[test]
+    fn test_chart_type_as_str() {
+        assert_eq!(ChartType::Bar.as_str(), "bar");
+        assert_eq!(ChartType::Line.as_str(), "line");
+        assert_eq!(ChartType::Pie.as_str(), "pie");
+        assert_eq!(ChartType::Scatter.as_str(), "scatter");
+    }
+
+    /// ChartType from_str / as_str 왕복 변환 검증
+    #[test]
+    fn test_chart_type_roundtrip() {
+        for s in &["bar", "line", "pie", "scatter"] {
+            let ct = ChartType::from_str(s).unwrap();
+            assert_eq!(ct.as_str(), *s);
+        }
+    }
+
+    // ── Program 테스트 ────────────────────────────────────────────────────────
+
+    /// Program::new() → stmts 비어 있음
+    #[test]
+    fn test_program_new_is_empty() {
+        let p = Program::new();
+        assert!(p.stmts.is_empty());
+    }
+
+    /// Program::default() == Program::new()
+    #[test]
+    fn test_program_default_equals_new() {
+        assert_eq!(Program::default(), Program::new());
+    }
+
+    // ── FillNullValue 테스트 ──────────────────────────────────────────────────
+
+    /// FillNullValue PartialEq — 같은 값 비교
+    #[test]
+    fn test_fill_null_value_eq() {
+        assert_eq!(FillNullValue::Int(0), FillNullValue::Int(0));
+        assert_ne!(FillNullValue::Int(0), FillNullValue::Int(1));
+        assert_eq!(
+            FillNullValue::Str("N/A".into()),
+            FillNullValue::Str("N/A".into())
+        );
+        assert_ne!(
+            FillNullValue::Str("N/A".into()),
+            FillNullValue::Str("".into())
+        );
+    }
+
+    // ── Expr Debug / Clone 테스트 ─────────────────────────────────────────────
+
+    /// Expr::Ident Debug 출력 검증
+    #[test]
+    fn test_expr_ident_debug() {
+        let e = Expr::Ident("pm10".into());
+        let debug = format!("{:?}", e);
+        assert!(debug.contains("pm10"), "Debug 출력에 pm10 없음: {}", debug);
+    }
+
+    /// Expr::BinOp Clone 검증
+    #[test]
+    fn test_expr_binop_clone() {
+        let e = Expr::BinOp {
+            lhs: Box::new(Expr::Ident("a".into())),
+            op: BinOpKind::Gt,
+            rhs: Box::new(Expr::IntLit(10)),
+        };
+        let cloned = e.clone();
+        assert_eq!(e, cloned);
+    }
+}

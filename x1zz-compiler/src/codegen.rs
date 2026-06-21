@@ -397,3 +397,493 @@ impl Default for Codegen {
         Codegen::new()
     }
 }
+
+// ── Codegen 유닛 테스트 ────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ast::{
+        BinOpKind, ChartConfig, ChartType, Expr, FillNullValue, JoinHow, PipelineOp,
+        PipelineSource, Program, Stmt, StructField,
+    };
+
+    /// 단일 VarDecl (Load 소스)을 갖는 Program 생성 헬퍼
+    fn make_load_program(ops: Vec<PipelineOp>) -> Program {
+        let mut p = Program::new();
+        p.stmts.push(Stmt::VarDecl {
+            var_name: "result".into(),
+            is_mut: false,
+            source: PipelineSource::Load {
+                file_path: "data.csv".into(),
+                schema_name: "MySchema".into(),
+            },
+            ops,
+        });
+        p
+    }
+
+    // ── expr_to_polars 출력 검증 ───────────────────────────────────────────────
+
+    /// Ident → col("...") 변환
+    #[test]
+    fn test_expr_to_polars_ident() {
+        assert_eq!(
+            Codegen::expr_to_polars(&Expr::Ident("pm10".into())),
+            "col(\"pm10\")"
+        );
+    }
+
+    /// IntLit → lit(...i64) 변환
+    #[test]
+    fn test_expr_to_polars_int_lit() {
+        assert_eq!(Codegen::expr_to_polars(&Expr::IntLit(42)), "lit(42i64)");
+    }
+
+    /// FloatLit → lit(...f64) 변환
+    #[test]
+    fn test_expr_to_polars_float_lit() {
+        assert_eq!(
+            Codegen::expr_to_polars(&Expr::FloatLit(2.5)),
+            "lit(2.5f64)"
+        );
+    }
+
+    /// BoolLit → lit(true/false) 변환
+    #[test]
+    fn test_expr_to_polars_bool_lit() {
+        assert_eq!(Codegen::expr_to_polars(&Expr::BoolLit(true)), "lit(true)");
+        assert_eq!(Codegen::expr_to_polars(&Expr::BoolLit(false)), "lit(false)");
+    }
+
+    /// StringLit → lit("...") 변환
+    #[test]
+    fn test_expr_to_polars_string_lit() {
+        assert_eq!(
+            Codegen::expr_to_polars(&Expr::StringLit("hello".into())),
+            "lit(\"hello\")"
+        );
+    }
+
+    /// BinOp Gt → col(...).gt(lit(...)) 변환
+    #[test]
+    fn test_expr_to_polars_binop_gt() {
+        let expr = Expr::BinOp {
+            lhs: Box::new(Expr::Ident("pm10".into())),
+            op: BinOpKind::Gt,
+            rhs: Box::new(Expr::IntLit(50)),
+        };
+        assert_eq!(
+            Codegen::expr_to_polars(&expr),
+            "col(\"pm10\").gt(lit(50i64))"
+        );
+    }
+
+    /// BinOp Eq → .eq(...) 변환
+    #[test]
+    fn test_expr_to_polars_binop_eq() {
+        let expr = Expr::BinOp {
+            lhs: Box::new(Expr::Ident("support".into())),
+            op: BinOpKind::Eq,
+            rhs: Box::new(Expr::BoolLit(false)),
+        };
+        assert_eq!(
+            Codegen::expr_to_polars(&expr),
+            "col(\"support\").eq(lit(false))"
+        );
+    }
+
+    /// BinOp Add → .add(...) 변환 (산술 연산자)
+    #[test]
+    fn test_expr_to_polars_binop_add() {
+        let expr = Expr::BinOp {
+            lhs: Box::new(Expr::Ident("a".into())),
+            op: BinOpKind::Add,
+            rhs: Box::new(Expr::Ident("b".into())),
+        };
+        assert_eq!(Codegen::expr_to_polars(&expr), "col(\"a\").add(col(\"b\"))");
+    }
+
+    /// BinOp Mul → .mul(...) 변환
+    #[test]
+    fn test_expr_to_polars_binop_mul() {
+        let expr = Expr::BinOp {
+            lhs: Box::new(Expr::Ident("price".into())),
+            op: BinOpKind::Mul,
+            rhs: Box::new(Expr::IntLit(2)),
+        };
+        let result = Codegen::expr_to_polars(&expr);
+        assert!(result.contains(".mul("), ".mul( 없음: {}", result);
+    }
+
+    // ── expr_to_xzz 출력 검증 ─────────────────────────────────────────────────
+
+    /// Ident → 식별자 문자열 그대로
+    #[test]
+    fn test_expr_to_xzz_ident() {
+        assert_eq!(Codegen::expr_to_xzz(&Expr::Ident("pm10".into())), "pm10");
+    }
+
+    /// BinOp Gt → "lhs > rhs"
+    #[test]
+    fn test_expr_to_xzz_binop_gt() {
+        let expr = Expr::BinOp {
+            lhs: Box::new(Expr::Ident("age".into())),
+            op: BinOpKind::Gt,
+            rhs: Box::new(Expr::IntLit(18)),
+        };
+        assert_eq!(Codegen::expr_to_xzz(&expr), "age > 18");
+    }
+
+    /// BinOp Add → "lhs + rhs"
+    #[test]
+    fn test_expr_to_xzz_binop_add() {
+        let expr = Expr::BinOp {
+            lhs: Box::new(Expr::Ident("a".into())),
+            op: BinOpKind::Add,
+            rhs: Box::new(Expr::Ident("b".into())),
+        };
+        assert_eq!(Codegen::expr_to_xzz(&expr), "a + b");
+    }
+
+    // ── generate() 전체 파이프라인 출력 검증 ──────────────────────────────────
+
+    /// TypeDecl → Schema 주석 블록 생성
+    #[test]
+    fn test_generate_type_decl_comment() {
+        let mut p = Program::new();
+        p.stmts.push(Stmt::TypeDecl {
+            name: "AirQuality".into(),
+            fields: vec![
+                StructField {
+                    name: "station".into(),
+                    field_type: "string".into(),
+                },
+                StructField {
+                    name: "pm10".into(),
+                    field_type: "Option<float>".into(),
+                },
+            ],
+        });
+        let output = Codegen::generate(&p);
+        assert!(
+            output.contains("// [Schema] AirQuality"),
+            "Schema 주석 없음: {}",
+            output
+        );
+        assert!(output.contains("station"), "station 필드 없음");
+        assert!(output.contains("Option<float>"), "Option<float> 없음");
+    }
+
+    /// VarDecl (Load 소스) → LazyCsvReader 코드 생성
+    #[test]
+    fn test_generate_var_decl_load_source() {
+        let program = make_load_program(vec![]);
+        let output = Codegen::generate(&program);
+        assert!(
+            output.contains("LazyCsvReader::new(\"data.csv\")"),
+            "LazyCsvReader 없음: {}",
+            output
+        );
+        assert!(output.contains("result"), "변수명 result 없음");
+    }
+
+    /// VarDecl → .collect()? 종결자 포함
+    #[test]
+    fn test_generate_ends_with_collect() {
+        let program = make_load_program(vec![]);
+        let output = Codegen::generate(&program);
+        assert!(
+            output.contains(".collect()?"),
+            ".collect()? 없음: {}",
+            output
+        );
+    }
+
+    /// VarDecl (VarRef 소스) → .clone().lazy() 코드 생성
+    #[test]
+    fn test_generate_var_ref_source() {
+        let mut p = Program::new();
+        p.stmts.push(Stmt::VarDecl {
+            var_name: "filtered".into(),
+            is_mut: false,
+            source: PipelineSource::VarRef("air".into()),
+            ops: vec![],
+        });
+        let output = Codegen::generate(&p);
+        assert!(
+            output.contains("air.clone().lazy()"),
+            "clone().lazy() 없음: {}",
+            output
+        );
+    }
+
+    /// mut 변수 선언 → 주석에 "mut " 포함
+    #[test]
+    fn test_generate_mut_var_comment() {
+        let mut p = Program::new();
+        p.stmts.push(Stmt::VarDecl {
+            var_name: "data".into(),
+            is_mut: true,
+            source: PipelineSource::Load {
+                file_path: "f.csv".into(),
+                schema_name: "S".into(),
+            },
+            ops: vec![],
+        });
+        let output = Codegen::generate(&p);
+        assert!(output.contains("mut v data"), "mut v 없음: {}", output);
+    }
+
+    /// Filter op → .filter(...) 출력
+    #[test]
+    fn test_generate_filter_op() {
+        let program = make_load_program(vec![PipelineOp::Filter(Expr::BinOp {
+            lhs: Box::new(Expr::Ident("pm10".into())),
+            op: BinOpKind::Gt,
+            rhs: Box::new(Expr::IntLit(50)),
+        })]);
+        let output = Codegen::generate(&program);
+        assert!(output.contains(".filter("), ".filter( 없음: {}", output);
+        assert!(output.contains("pm10"), "pm10 없음");
+    }
+
+    /// Select op → .select([col(...)]) 출력
+    #[test]
+    fn test_generate_select_op() {
+        let program = make_load_program(vec![PipelineOp::Select(vec![
+            "station".into(),
+            "date".into(),
+        ])]);
+        let output = Codegen::generate(&program);
+        assert!(output.contains(".select(["), ".select([ 없음: {}", output);
+        assert!(output.contains("col(\"station\")"), "col(\"station\") 없음");
+        assert!(output.contains("col(\"date\")"), "col(\"date\") 없음");
+    }
+
+    /// GroupBy op → .group_by([col(...)]) 출력
+    #[test]
+    fn test_generate_group_by_op() {
+        let program = make_load_program(vec![PipelineOp::GroupBy("region".into())]);
+        let output = Codegen::generate(&program);
+        assert!(
+            output.contains(".group_by([col(\"region\")])"),
+            "group_by 없음: {}",
+            output
+        );
+    }
+
+    /// Sum op → .agg([col(...).sum()]) 출력
+    #[test]
+    fn test_generate_sum_op() {
+        let program = make_load_program(vec![PipelineOp::Sum("pop".into())]);
+        let output = Codegen::generate(&program);
+        assert!(output.contains(".sum()"), ".sum() 없음: {}", output);
+    }
+
+    /// Mean op → .agg([col(...).mean()]) 출력
+    #[test]
+    fn test_generate_mean_op() {
+        let program = make_load_program(vec![PipelineOp::Mean("score".into())]);
+        let output = Codegen::generate(&program);
+        assert!(output.contains(".mean()"), ".mean() 없음: {}", output);
+    }
+
+    /// OrderBy desc:true → with_order_descending(true)
+    #[test]
+    fn test_generate_order_by_desc() {
+        let program = make_load_program(vec![PipelineOp::OrderBy {
+            col: "income".into(),
+            desc: true,
+        }]);
+        let output = Codegen::generate(&program);
+        assert!(
+            output.contains("with_order_descending(true)"),
+            "with_order_descending 없음: {}",
+            output
+        );
+    }
+
+    /// Take(10) → .limit(10)
+    #[test]
+    fn test_generate_take_op() {
+        let program = make_load_program(vec![PipelineOp::Take(10)]);
+        let output = Codegen::generate(&program);
+        assert!(output.contains(".limit(10)"), ".limit(10) 없음: {}", output);
+    }
+
+    /// DropNull → .drop_nulls(...)
+    #[test]
+    fn test_generate_drop_null() {
+        let program = make_load_program(vec![PipelineOp::DropNull("pm10".into())]);
+        let output = Codegen::generate(&program);
+        assert!(
+            output.contains(".drop_nulls("),
+            ".drop_nulls 없음: {}",
+            output
+        );
+    }
+
+    /// FillNull Int → fill_null(lit(0i64))
+    #[test]
+    fn test_generate_fill_null_int() {
+        let program = make_load_program(vec![PipelineOp::FillNull {
+            col: "pm10".into(),
+            value: FillNullValue::Int(0),
+        }]);
+        let output = Codegen::generate(&program);
+        assert!(
+            output.contains("fill_null(lit(0i64))"),
+            "fill_null 없음: {}",
+            output
+        );
+    }
+
+    /// FillNull Float → fill_null(lit(...f64))
+    #[test]
+    fn test_generate_fill_null_float() {
+        let program = make_load_program(vec![PipelineOp::FillNull {
+            col: "score".into(),
+            value: FillNullValue::Float(0.0),
+        }]);
+        let output = Codegen::generate(&program);
+        assert!(output.contains("f64"), "f64 없음: {}", output);
+    }
+
+    /// Join op → .join(...) + JoinType::Inner
+    #[test]
+    fn test_generate_join_op() {
+        let program = make_load_program(vec![PipelineOp::Join {
+            other: "right".into(),
+            left_on: vec!["id".into()],
+            right_on: vec!["id".into()],
+            how: JoinHow::Inner,
+        }]);
+        let output = Codegen::generate(&program);
+        assert!(output.contains(".join("), ".join( 없음: {}", output);
+        assert!(
+            output.contains("JoinType::Inner"),
+            "JoinType::Inner 없음: {}",
+            output
+        );
+    }
+
+    /// Cast "float" → DataType::Float64
+    #[test]
+    fn test_generate_cast_float() {
+        let program = make_load_program(vec![PipelineOp::Cast {
+            col: "pm10".into(),
+            to_type: "float".into(),
+        }]);
+        let output = Codegen::generate(&program);
+        assert!(
+            output.contains("DataType::Float64"),
+            "DataType::Float64 없음: {}",
+            output
+        );
+    }
+
+    /// Cast "int" → DataType::Int64
+    #[test]
+    fn test_generate_cast_int() {
+        let program = make_load_program(vec![PipelineOp::Cast {
+            col: "count".into(),
+            to_type: "int".into(),
+        }]);
+        let output = Codegen::generate(&program);
+        assert!(
+            output.contains("DataType::Int64"),
+            "DataType::Int64 없음: {}",
+            output
+        );
+    }
+
+    /// Rename → .rename(["old"], ["new"], false)
+    #[test]
+    fn test_generate_rename_op() {
+        let program = make_load_program(vec![PipelineOp::Rename {
+            old_name: "old_col".into(),
+            new_name: "new_col".into(),
+        }]);
+        let output = Codegen::generate(&program);
+        assert!(
+            output.contains(".rename([\"old_col\"], [\"new_col\"]"),
+            ".rename 없음: {}",
+            output
+        );
+    }
+
+    /// Replace → .str().replace(...)
+    #[test]
+    fn test_generate_replace_op() {
+        let program = make_load_program(vec![PipelineOp::Replace {
+            col: "code".into(),
+            from: ".".into(),
+            to: "".into(),
+        }]);
+        let output = Codegen::generate(&program);
+        assert!(
+            output.contains(".str().replace("),
+            ".str().replace 없음: {}",
+            output
+        );
+    }
+
+    /// Chart op → [x1zz:chart] JSON 출력 주석
+    #[test]
+    fn test_generate_chart_op_comment() {
+        let program = make_load_program(vec![PipelineOp::Chart(ChartConfig {
+            chart_type: ChartType::Bar,
+            title: None,
+            x: Some("region".into()),
+            y: Some("count".into()),
+            label: None,
+            value: None,
+        })]);
+        let output = Codegen::generate(&program);
+        assert!(
+            output.contains("[x1zz:chart]"),
+            "chart JSON 출력 주석 없음: {}",
+            output
+        );
+    }
+
+    /// Count(None) → 전체 행 수 주석
+    #[test]
+    fn test_generate_count_none() {
+        let program = make_load_program(vec![PipelineOp::Count(None)]);
+        let output = Codegen::generate(&program);
+        assert!(output.contains("|> count"), "|> count 없음: {}", output);
+    }
+
+    /// Count(Some(col)) → .agg([col(...).count()])
+    #[test]
+    fn test_generate_count_some() {
+        let program = make_load_program(vec![PipelineOp::Count(Some("population".into()))]);
+        let output = Codegen::generate(&program);
+        assert!(output.contains(".count()"), ".count() 없음: {}", output);
+    }
+
+    /// WithColumn → .with_columns([expr.alias("name")])
+    #[test]
+    fn test_generate_with_column_op() {
+        let program = make_load_program(vec![PipelineOp::WithColumn {
+            name: "total".into(),
+            expr: Expr::BinOp {
+                lhs: Box::new(Expr::Ident("a".into())),
+                op: BinOpKind::Add,
+                rhs: Box::new(Expr::Ident("b".into())),
+            },
+        }]);
+        let output = Codegen::generate(&program);
+        assert!(
+            output.contains(".with_columns("),
+            ".with_columns( 없음: {}",
+            output
+        );
+        assert!(
+            output.contains(".alias(\"total\")"),
+            ".alias(\"total\") 없음"
+        );
+    }
+}

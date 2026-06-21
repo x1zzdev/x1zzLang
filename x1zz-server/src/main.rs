@@ -10,15 +10,9 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
 
-use axum::{
-    Router,
-    extract::Multipart,
-    http::StatusCode,
-    response::Json,
-    routing::post,
-};
+use axum::{extract::Multipart, http::StatusCode, response::Json, routing::post, Router};
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use tower_http::cors::{Any, CorsLayer};
 
 // ── 요청 / 응답 타입 ────────────────────────────────────────────────────────
@@ -101,10 +95,7 @@ async fn handle_execute(
 
     // 3. x1zz run <tmp.xzz> 실행
     let output = tokio::task::spawn_blocking(move || {
-        Command::new(&exe_path)
-            .arg("run")
-            .arg(&tmp_path)
-            .output()
+        Command::new(&exe_path).arg("run").arg(&tmp_path).output()
     })
     .await
     .map_err(|e| internal_err(format!("spawn_blocking 실패: {}", e)))?
@@ -179,16 +170,11 @@ async fn handle_schema(
         )
     })? {
         if field.name() == Some("file") {
-            original_name = field
-                .file_name()
-                .unwrap_or("upload.csv")
-                .to_string();
-            let data = field.bytes().await.map_err(|e| {
-                (
-                    StatusCode::BAD_REQUEST,
-                    format!("파일 읽기 실패: {}", e),
-                )
-            })?;
+            original_name = field.file_name().unwrap_or("upload.csv").to_string();
+            let data = field
+                .bytes()
+                .await
+                .map_err(|e| (StatusCode::BAD_REQUEST, format!("파일 읽기 실패: {}", e)))?;
             file_bytes = Some(data.to_vec());
         }
     }
@@ -199,20 +185,27 @@ async fn handle_schema(
     let uid = uuid::Uuid::new_v4().to_string();
     let safe_name: String = original_name
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '.' || c == '_' || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '.' || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     let file_path = format!("uploads/{}_{}", uid, safe_name);
-    std::fs::write(&file_path, &bytes)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("파일 저장 실패: {}", e)))?;
+    std::fs::write(&file_path, &bytes).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("파일 저장 실패: {}", e),
+        )
+    })?;
 
     // 인코딩 감지 및 CSV 파싱
     let text = decode_bytes(&bytes);
     let schema = infer_csv_schema_from_text(&text);
 
-    Ok(Json(SchemaResponse {
-        schema,
-        file_path,
-    }))
+    Ok(Json(SchemaResponse { schema, file_path }))
 }
 
 // ── CSV 스키마 추론 (x1zz import 와 동일 로직) ────────────────────────────────
@@ -290,9 +283,11 @@ fn infer_type(values: &[String]) -> String {
         }
     }
 
-    if all_bool && values.iter().all(|v| {
-        matches!(v.to_lowercase().as_str(), "true" | "false")
-    }) {
+    if all_bool
+        && values
+            .iter()
+            .all(|v| matches!(v.to_lowercase().as_str(), "true" | "false"))
+    {
         "bool".to_string()
     } else if all_int {
         "int".to_string()
@@ -308,7 +303,10 @@ fn infer_type(values: &[String]) -> String {
 fn find_x1zz_exe() -> PathBuf {
     // 1. 현재 실행파일과 같은 디렉터리
     if let Ok(current_exe) = std::env::current_exe() {
-        let sibling = current_exe.parent().unwrap_or(&current_exe).join("x1zz.exe");
+        let sibling = current_exe
+            .parent()
+            .unwrap_or(&current_exe)
+            .join("x1zz.exe");
         if sibling.exists() {
             return sibling;
         }

@@ -18,6 +18,7 @@
 [![Language: .xzz](https://img.shields.io/badge/Language-.xzz-orange.svg)]()
 [![Backend: Polars](https://img.shields.io/badge/Backend-Polars-red.svg)]()
 [![Version: v0.2.8](https://img.shields.io/badge/Version-v0.2.8-green.svg)](https://github.com/x1zzdev/x1zzLang/releases)
+[![CI](https://github.com/x1zzdev/x1zzLang/actions/workflows/ci.yml/badge.svg)](https://github.com/x1zzdev/x1zzLang/actions/workflows/ci.yml)
 
 [한국어 README](README_kr.md)
 

@@ -27,7 +27,11 @@ fn main() {
         }
     };
 
-    eprintln!("[x1zz-compiler] 입력: {}  ({} bytes)", input_path, source.len());
+    eprintln!(
+        "[x1zz-compiler] 입력: {}  ({} bytes)",
+        input_path,
+        source.len()
+    );
 
     // ── Lexer ────────────────────────────────────────────────────────────────
     let mut lexer = x1zz_compiler::Lexer::new(&source);
@@ -60,7 +64,10 @@ fn main() {
             std::process::exit(1);
         }
     };
-    eprintln!("[x1zz-compiler] Parser 완료: {} AST 노드", program.stmts.len());
+    eprintln!(
+        "[x1zz-compiler] Parser 완료: {} AST 노드",
+        program.stmts.len()
+    );
 
     if verbose {
         println!("\n⚡ STEP 2. Abstract Syntax Tree");
@@ -77,5 +84,8 @@ fn main() {
     println!("{}", codegen_output);
 
     eprintln!("[x1zz-compiler] 컴파일 완료");
-    eprintln!("[x1zz-compiler] ℹ️  실행(run)은 'x1zz run {}' 를 사용하세요.", input_path);
+    eprintln!(
+        "[x1zz-compiler] ℹ️  실행(run)은 'x1zz run {}' 를 사용하세요.",
+        input_path
+    );
 }

@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "dev"]
+  pull_request:
+    branches: ["main", "dev"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --no-self-update --profile minimal --component rustfmt clippy
+          rustup default stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: registry-${{ matrix.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: registry-${{ matrix.os }}-
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: build-test-${{ matrix.os }}-${{ hashFiles('**/Cargo.lock') }}-${{ hashFiles('src/**/*.rs', 'x1zz-*/src/**/*.rs') }}
+          restore-keys: |
+            build-test-${{ matrix.os }}-${{ hashFiles('**/Cargo.lock') }}-
+            build-test-${{ matrix.os }}-
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets
+        continue-on-error: true
+
+      - name: cargo test
+        run: cargo test --workspace
