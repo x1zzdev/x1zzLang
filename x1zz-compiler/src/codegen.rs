@@ -443,10 +443,7 @@ mod tests {
     /// FloatLit → lit(...f64) 변환
     #[test]
     fn test_expr_to_polars_float_lit() {
-        assert_eq!(
-            Codegen::expr_to_polars(&Expr::FloatLit(2.5)),
-            "lit(2.5f64)"
-        );
+        assert_eq!(Codegen::expr_to_polars(&Expr::FloatLit(2.5)), "lit(2.5f64)");
     }
 
     /// BoolLit → lit(true/false) 변환
