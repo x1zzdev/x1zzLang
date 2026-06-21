@@ -149,7 +149,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // ── check: sLM 정적 분석 (NQP) ──────────────────────────────────────
         Commands::Check { file } => {
-            println!("🔍  정적 분석을 시작합니다 …  ({})", file.display());
+            println!("[Experimental] x1zz check — Neural Query Planner");
+            println!("  이 기능은 현재 실험적 상태입니다. 출력은 시범용 결과입니다.");
+            println!();
+            println!("정적 분석을 시작합니다 …  ({})", file.display());
 
             let spinner = ux::create_spinner("sLM Neural Query Planner 분석 중 …");
             // tokio::time::sleep 제거 → std::thread::sleep 사용
@@ -165,12 +168,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // ── sde: 합성 데이터 생성 ────────────────────────────────────────────
         Commands::Sde { rows, output } => {
+            println!("[Preview] x1zz sde — Synthetic Data Engine");
+            println!("  이 기능은 현재 Preview 상태입니다. CLI 통합이 진행 중입니다.");
+            println!();
             println!(
-                "⚙  x1zz sde  │  rows: {}  │  output: {}",
+                "  rows: {}  │  output: {}",
                 rows,
                 output.display()
             );
-            println!("   [x1zz-sde 엔진 연동 예정]  정상 종료.");
+            println!("  x1zz-sde 엔진 연동 예정.");
         }
 
         // ── new: 새 프로젝트 생성 ─────────────────────────────────────────────

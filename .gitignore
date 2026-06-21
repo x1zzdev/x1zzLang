@@ -4,10 +4,19 @@
 .roorules
 .clinerules
 .roo/
-.clinerules
 
 x1zz-sde
 
 benches/data/*.csv
 
+# Personal development notes (not for distribution)
+commitGuide.txt
+
+# Temporary backup and build artifacts
+core_code.zip
+final_result_chart.html
+result_file_input_chart.html
+dist/
+
+# Personal documents
 @x1zzLang_MVP_Roadmap_v3.docx

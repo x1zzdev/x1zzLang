@@ -183,7 +183,7 @@ jobs:
           archives=( release/x1zz-* )
 
           if [ ${#archives[@]} -ne 3 ]; then
-            echo "ERROR: expected 4 archives, found ${#archives[@]}"
+            echo "ERROR: expected 3 archives, found ${#archives[@]}"
             exit 1
           fi
 

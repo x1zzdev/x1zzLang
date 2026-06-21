@@ -11,12 +11,13 @@
 
 # x1zzLang
 
-**비전문가도 코드 없이 데이터 분석을 수행할 수 있는 DSL 플랫폼.**
+**데이터 분석 접근성을 탐구하기 위해 설계된 Rust 기반 DSL 플랫폼.**  
+*겉으로는 스크립트, 핵심은 컴파일러.*
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Language: .xzz](https://img.shields.io/badge/Language-.xzz-orange.svg)]()
 [![Backend: Polars](https://img.shields.io/badge/Backend-Polars-red.svg)]()
-[![Status: v0.2.0](https://img.shields.io/badge/Status-v0.2.0-green.svg)]()
+[![Version: v0.2.8](https://img.shields.io/badge/Version-v0.2.8-green.svg)](https://github.com/x1zzdev/x1zzLang/releases)
 
 [English README](README.md)
 
@@ -24,53 +25,41 @@
 
 ---
 
-## Visual IDE
+## 프로젝트 소개
 
-[![x1zzLang Visual IDE](screenshot_visual_ide.png)](https://github.com/x1zzdev/x1zzLang-visual-ide)
+x1zzLang은 데이터 분석 도구의 접근성을 탐구하기 위해 설계된 DSL(도메인 특화 언어)이다.  
+`.xzz` 스크립트를 Rust 기반 컴파일러 파이프라인을 통해 [Polars](https://github.com/pola-rs/polars) LazyFrame 실행 계획으로 컴파일한다.
 
-`.xzz` 파이프라인을 위한 그래픽 편집 및 실행 환경.  
-→ [x1zzLang Visual IDE 저장소](https://github.com/x1zzdev/x1zzLang-visual-ide)
+이 프로젝트의 핵심은 **언어 설계**, **컴파일러 엔지니어링**, **타입 시스템 연구**다.  
+기존 데이터 분석 도구를 대체하는 것이 목표가 아니다.
+
+**이 프로젝트에서 확인할 수 있는 것:**
+- `Option<T>` 기반 null-safe 타입 시스템을 가진 선언적 파이프라인 DSL
+- Polars 같은 무거운 의존성을 CLI 바이너리에서 격리한 멀티 크레이트 Rust 워크스페이스 구조
+- CSV 파일에서 타입 정의를 자동 생성하는 스키마 추론 도구 (`x1zz import`)
+- 파이프라인 편집을 위한 Visual IDE
 
 ---
 
-## 🔥 3개의 명령어로 시작하기
+## 핵심 아이디어
 
-```bash
-x1zz new my-project       # 프로젝트 + 샘플 CSV 즉시 생성
-cd my-project
-x1zz import data.csv      # 스키마 자동 추론 — 타입 정의 자동 생성
-x1zz run analysis.xzz     # 파이프라인 실행 + 차트 렌더링
+기존 데이터 분석 워크플로는 실제 데이터를 만지기 전에 준비가 필요하다. Python 설치, 라이브러리 설치, 가상환경 구성, 컬럼 타입 수동 파악, NaN 처리...
+
+x1zzLang은 다른 방향을 탐구한다. 스키마를 타입 선언으로 먼저 정의하고, null 안전성을 타입 시스템에서 강제하며, 파이프라인은 이름 있는 연산자의 조합으로 표현한다.
+
+```
+타입 선언 → 파이프라인 조합 → 컴파일된 실행
 ```
 
-Python 없이. pip install 없이. virtualenv 없이. 타입 직접 타이핑 없이.
+목적은 기존 도구를 대체하는 것이 아니라, 타입 안전한 데이터 파이프라인 언어를 처음부터 설계하면 어떤 형태가 되는지 탐구하는 것이다.
 
 ---
 
-## Why x1zzLang?
+## 빠른 예제
 
-데이터는 어디에나 존재한다. 공공 데이터셋이 매년 공개된다.
+**시나리오:** CSV 파일에서 공기질 데이터를 필터링하고 집계한다.
 
-**Python/pandas가 데이터 분석의 Microsoft라면, x1zzLang은 Apple이다.**
-
-장벽은 데이터 가용성이 아니라 분석 접근성이다.
-
-데이터를 단 한 행이라도 다루기 전에, 분석가는 라이브러리를 설치하고, Python 환경을 구성하고, 여러 API를 외워야 한다. 대부분의 사람들은 그 단계에서 멈춘다 — 문제가 해결 불가능해서가 아니라, 도구가 그들을 위해 만들어지지 않았기 때문이다.
-
-| 장벽 | 문제 |
-|------|------|
-| 라이브러리 전제 조건 | Python / Pandas / SQL — 분석 전 코드 중심 셋업 필요 |
-| 런타임 타입 에러 | 타입 불일치와 컬럼 오류가 실행 중에 발생 |
-| 환경 의존성 | 셋업 마찰이 첫 결과 전에 사용자 이탈을 유발 |
-
-x1zzLang은 코드 중심 분석을 DSL 기반 인터랙션으로 대체한다.
-
----
-
-## Python vs. x1zzLang
-
-**시나리오:** CSV 데이터셋을 필터링하고 집계합니다.
-
-### Python (Pandas)
+### Python (pandas)
 
 ```python
 import pandas as pd
@@ -81,7 +70,7 @@ result = df.groupby("station")["pm10"].mean()
 print(result)
 ```
 
-*라이브러리 설치 필요. 타입 에러는 런타임에 발생. NaN 처리는 수동.*
+*라이브러리 설치 필요. 타입 오류는 실행 시점에 발생. null 처리는 수동.*
 
 ### x1zzLang
 
@@ -98,203 +87,193 @@ v data = load("data.csv") :: AirQuality
   |> mean("pm10")
 ```
 
-*import 없음. 스키마를 먼저 선언. `Option<T>`으로 null 안전 처리.*
+*import 없음. 스키마를 먼저 선언. `Option<T>`로 null 안전 처리.*
 
-| | Python (Pandas) | x1zzLang |
+| | Python (pandas) | x1zzLang |
 |--|-----------------|----------|
 | 라이브러리 의존성 | `pandas`, `numpy` | 없음 (내장) |
-| 타입 검증 | 런타임 | 스키마 선언 |
-| Null 처리 | 수동 | `Option<T>` |
+| 타입 검증 시점 | 런타임 | 스키마 선언 시 |
+| Null 처리 | 수동 NaN 처리 | 타입 정의의 `Option<T>` |
 
-**워크플로 차이:**  
-Python은 분석 한 줄을 작성하기 전에 의존성을 설치하고, CSV를 직접 열어 컬럼 타입을 추론하고, NaN을 명시적으로 처리해야 한다.  
-x1zzLang은 `x1zz import`에서 시작한다 — 스키마가 자동 추론되고, null 안전성은 타입에 선언되며, 파이프라인은 즉시 실행 가능하다.
-
----
-
-## ⚡ 온보딩 워크플로 (Onboarding Workflow)
-
-**Before — Python + pandas**
-
-```
-Python 설치 → pip install pandas numpy → virtualenv 생성
-→ CSV를 열어 컬럼명 수동 확인
-→ dtype 매핑 직접 작성
-→ NaN 값 명시적 처리
-→ 분석 코드 작성 → 실행 → 런타임 에러 디버깅
-→ pip install matplotlib → 플로팅 코드 작성 → 재실행
-```
-
-**After — x1zzLang**
+**`x1zz import`부터 실행까지:**
 
 ```bash
-x1zz new my-project    # 프로젝트 + 샘플 CSV 즉시 생성
+x1zz new my-project    # 프로젝트 + 샘플 CSV 생성
 cd my-project
-x1zz import data.csv   # 스키마 자동 추론, 타입 블록이 main.xzz에 자동 기록
-x1zz run analysis.xzz  # 파이프라인 실행 + 차트 렌더링
-```
-
-| 단계 | Before (pandas) | After (x1zzLang) |
-|------|----------------|-----------------|
-| 환경 설정 | pip, virtualenv, import 문 | 없음 |
-| 스키마 선언 | 컬럼 수동 확인 | `x1zz import` 자동 생성 |
-| Null 처리 | 명시적 NaN 처리 | 타입 정의의 `Option<T>` |
-| 시각화 | matplotlib 별도 설치 | 파이프라인 내 `chart {}` 블록 |
-
----
-
-## 🧠 핵심 UX 기능 (Core UX Features)
-
-| 기능 | 설명 |
-|------|------|
-| **제로 셋업 실행** (`x1zz run`) | 단일 바이너리, Python 또는 라이브러리 설치 불필요 |
-| **자동 스키마 추론** (`x1zz import`) | CSV 헤더와 샘플 데이터를 읽어 타입 정의와 `load` 문을 자동 생성. EUC-KR(CP949) 한글 CSV도 지원 |
-| **선언형 파이프라인 DSL** (`\|>`) | `filter`, `groupBy`, `join`, `sort`, `withColumn`을 선언적 파이프 체인으로 조합 |
-| **Null 안전 타입 시스템** (`Option<T>`) | 누락 데이터를 `Option<float>`으로 선언, `fillNull`로 안전하게 처리 |
-| **내장 시각화** (`chart {}`) | 파이프라인 결과를 bar, line, pie, scatter 차트로 렌더링 — 외부 라이브러리 불필요 |
-| **원커맨드 프로젝트 생성** (`x1zz new`) | 샘플 CSV + 실행 가능한 `example.xzz` + `x1zz.toml`을 한 번에 생성 |
-
----
-
-## 기능 (Features)
-
-| 기능 | 설명 |
-|------|------|
-| CSV 로딩 | 파일 수집 |
-| 필터링 | 조건부 필터링 |
-| 집계 | 그룹별 통계 |
-| 시각화 | 결과 렌더링 |
-| 컴파일러 파이프라인 | DSL → IR 변환 |
-| Visual IDE | GUI 편집기 |
-| 런타임 실행 | Polars 엔진 |
-
----
-
-## 예제 (Example)
-
-```xzz
-type AirQuality = {
-  date:    string,
-  station: string,
-  pm10:    Option<float>,
-  pm25:    Option<float>,
-}
-
-v data = load("data.csv") :: AirQuality
-  |> cast("pm10", "float")
-  |> cast("pm25", "float")
-  |> filter(pm10 > 50)
-  |> select([date, station, pm10, pm25])
-```
-
-```bash
-x1zz run analysis.xzz
+x1zz import data.csv   # 스키마 자동 추론 → main.xzz에 타입 블록 기록
+x1zz run main.xzz      # 컴파일 + 파이프라인 실행
 ```
 
 ---
 
-## 설치 (Installation)
+## 실행 결과 미리보기
 
-### 1. 릴리스 다운로드
-
-최신 릴리스를 다운로드:
-
-**[https://github.com/x1zzdev/x1zzLang/releases](https://github.com/x1zzdev/x1zzLang/releases)**
-
-### 2. 압축 해제
-
-릴리스 패키지를 로컬 폴더에 압축 해제하세요.
-
-### 3. 실행
-
-```bash
-x1zz run <file>
-```
-
-### 4. 설치 확인
-
-```bash
-x1zz --version
-```
-
-### 중요 사항
-
-- Rust 또는 Cargo 불필요
-- 독립 실행형 바이너리
-- 의존성 내장 포함
-
----
-
-## 빠른 시작 (Quick Start)
-
-```bash
-# 1. 릴리스 패키지를 다운로드하고 압축 해제
-# 2. 파이프라인 실행
-x1zz run <file>
-# 3. 터미널에서 출력 확인
-```
-
----
-
-## 아키텍처 (Architecture)
-
-> ⚠️ 개념적 개요만을 나타냅니다.
-
-```
-x1zz-cli
-├── x1zz-core
-└── x1zz-compiler
-
-x1zz-runner
-└── IPC Bridge
-
-x1zz-exec
-└── Polars Runtime
-```
-
----
-
-## 벤치마크 (Benchmark)
+`chart {}` 블록이 포함된 파이프라인을 실행하면 HTML 차트로 결과를 렌더링한다.
 
 ![x1zzLang Benchmark](benches/x1zzLang_benchmark2.png)
 
-> *벤치마크: x1zzLang 파이프라인 실행 vs. 동일한 Pandas 파이프라인.*
+> *예시: 파이프라인 실행 결과를 bar 차트로 렌더링. 차트 출력은 HTML 파일로 저장된다.*
 
 ---
 
-## 현재 상태 (Current Status)
+## Visual IDE
 
-**활성 개발 중 (Active Development)**
+[![x1zzLang Visual IDE](screenshot_visual_ide.png)](https://github.com/x1zzdev/x1zzLang-visual-ide)
 
----
-
-## 로드맵 (Roadmap)
-
-| Phase | 목표 |
-|-------|------|
-| Phase 1 — Core Language | DSL 문법, 타입 시스템, 컴파일러 파이프라인 |
-| Phase 2 — Execution Layer | Polars 완전 연동, CLI 도구 |
-| Phase 3 — IDE Integration | Visual IDE, 그래픽 파이프라인 편집기 |
-| Phase 4 — AI Expansion | 자연어 인터페이스, AI 기반 분석 |
+`.xzz` 파이프라인을 위한 그래픽 편집 및 실행 환경.  
+→ [x1zzLang Visual IDE 저장소](https://github.com/x1zzdev/x1zzLang-visual-ide)
 
 ---
 
-## 기여 (Contributing)
+## 기능
 
-`x1zzLang`은 오픈소스 프로젝트입니다. 피드백과 제안은 언제든 환영합니다.
-
-다만 2026년 제8회 한국코드페어 평가 기간 동안에는 저작자 동일성 및 프로젝트 무결성을 보장하기 위해 코드 기여(Pull Request)는 2026년 10월 대회 종료 시점까지 임시로 제한됩니다.
-
-- 이슈 (버그 제보, 아이디어, 논의): 항상 환영합니다
-- Pull Request (코드 기여): 대회 종료 전까지는 닫혀 있으며, 이후 재개됩니다
-
-x1zzLang에 관심과 응원을 보내주셔서 감사합니다.
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| `x1zz run` | `.xzz` 파이프라인 컴파일 및 실행 | Stable |
+| `x1zz import` | CSV 스키마 자동 추론 → 타입 블록 생성 | Stable |
+| `x1zz new` | 샘플 CSV + 실행 가능한 예제 포함 프로젝트 생성 | Stable |
+| `x1zz emit rust` | `.xzz` → Rust 소스 변환 (Polars LazyFrame 호출) | Stable |
+| `x1zz check` | Neural Query Planner 기반 정적 분석 | Experimental |
+| `x1zz sde` | 합성 데이터 생성 엔진 연동 | Preview |
+| 내장 `chart {}` | 파이프라인 결과를 bar / line / pie / scatter 차트로 렌더링 | Stable |
+| `Option<T>` 타입 시스템 | null-safe 컬럼 선언, `fillNull` 연산자 | Stable |
+| EUC-KR CSV 지원 | CP949 인코딩 한글 CSV 자동 감지 및 디코딩 | Stable |
+| Visual IDE | 그래픽 파이프라인 편집기 (별도 저장소) | Stable |
 
 ---
 
-## 라이선스 (License)
+## 아키텍처
 
-Apache-2.0
+x1zzLang은 의존성 격리를 의도적으로 설계한 Cargo 워크스페이스 구조를 사용한다.  
+CLI 바이너리에는 Polars나 Tokio가 링크되지 않는다. 무거운 의존성은 실행 엔진 바이너리(`x1zz-runner` / `x1zz-exec`)에만 격리된다.
+
+```
+x1zz (CLI 바이너리)
+│  clap + indicatif + colored + csv + anyhow + encoding_rs
+│  Polars 없음  ·  Tokio 없음
+│
+├── x1zz-compiler          Lexer → Parser → Codegen → Emitter
+│   └── x1zz-core          공유 AST / Token / Error 타입 (serde만)
+│
+└── [서브프로세스 스폰] ──► x1zz-runner
+                           │
+                           └── x1zz-exec       Polars LazyFrame 런타임
+```
+
+**크레이트별 역할:**
+
+| 크레이트 | 역할 | 무거운 의존성 |
+|----------|------|--------------|
+| `x1zz` (CLI) | 인자 파싱, import, new, emit, check | 없음 |
+| `x1zz-core` | 공유 AST, Token, Error 타입 | serde만 |
+| `x1zz-compiler` | Lexer / Parser / Codegen / Emitter | 없음 |
+| `x1zz-exec` | Polars 실행 엔진 | **Polars, encoding_rs** |
+| `x1zz-runner` | 실행 바이너리 (CLI가 스폰) | x1zz-exec 통해 간접 |
+| `x1zz-sde` | 합성 데이터 생성기 (독립) | polars, rayon |
+| `x1zz-server` | REST API 서버 (독립) | axum, tokio |
+
+**이 구조를 선택한 이유:**  
+CLI 바이너리는 Polars를 링크하지 않아 ~2–5 MB를 유지한다. `x1zz run` 호출 시 `x1zz-runner`를 서브프로세스로 스폰한다. 러너가 Polars 의존성 전체를 담당한다. 두 바이너리 간 통신은 CLI 인자만 사용한다(별도 IPC 없음).
+
+**바이너리 크기 분리:**
+
+| 바이너리 | 예상 크기 | 포함 내용 |
+|----------|----------|----------|
+| `x1zz` (CLI) | ~2–5 MB | 컴파일러, 스키마 추론, 프로젝트 생성 |
+| `x1zz-runner` | ~30+ MB | Polars 실행 엔진 |
+
+상세 내용은 [docs/WORKSPACE.md](docs/WORKSPACE.md) 참고.
+
+---
+
+## 설치
+
+### Option A — 사전 빌드 릴리스 (권장)
+
+1. [Releases](https://github.com/x1zzdev/x1zzLang/releases)에서 플랫폼에 맞는 아카이브를 다운로드한다.
+
+   | 플랫폼 | 아카이브 |
+   |--------|---------|
+   | Windows x64 | `x1zz-<version>-windows-x64.zip` |
+   | Linux x64 | `x1zz-<version>-linux-x64.tar.gz` |
+   | macOS arm64 | `x1zz-<version>-macos-arm64.tar.gz` |
+
+2. 아카이브를 압축 해제한다. `x1zz`와 `x1zz-runner`가 같은 디렉토리에 있어야 한다.
+
+   > **주의:** 두 바이너리는 반드시 같은 디렉토리에 있어야 한다. `x1zz run`은 `x1zz-runner`를 서브프로세스로 스폰하기 때문에 `x1zz-runner`가 없으면 파이프라인 실행이 실패한다.
+
+3. 압축 해제한 디렉토리를 `PATH`에 추가한다.
+
+4. 확인:
+
+   ```bash
+   x1zz --help
+   ```
+
+### Option B — 소스에서 빌드
+
+Rust stable 툴체인이 필요하다.
+
+```bash
+git clone https://github.com/x1zzdev/x1zzLang.git
+cd x1zzLang
+
+# CLI 빌드
+cargo build --release -p x1zz
+
+# 실행 엔진 빌드
+cargo build --release -p x1zz-runner
+
+# 두 바이너리 모두 target/release/에 생성됨
+```
+
+실행 전에 `x1zz`와 `x1zz-runner`를 같은 디렉토리에 배치한다.
+
+---
+
+## 벤치마크
+
+![x1zzLang Benchmark](benches/x1zzLang_benchmark2.png)
+
+서울 공기질 데이터셋 340만 행을 기준으로 x1zzLang과 동일한 pandas 파이프라인을 비교했다.
+
+> 해당 워크로드에서 pandas 대비 최대 **3.84배 빠른** 실행 속도를 달성했다.
+
+이 성능은 주로 Polars LazyFrame 백엔드 덕분이다. Polars는 실행 전에 쿼리 최적화를 적용한다. 벤치마크는 컴파일러 오버헤드가 아닌 엔드-투-엔드 파이프라인 처리량을 측정한다.
+
+벤치마크 소스: [`benches/run_benchmark.py`](benches/run_benchmark.py) / [`benches/benchmark_pipeline.xzz`](benches/benchmark_pipeline.xzz)
+
+---
+
+## 로드맵
+
+| Phase | 목표 | 상태 |
+|-------|------|------|
+| Phase 1 — Core Language | DSL 문법, 타입 시스템, 컴파일러 파이프라인 | 완료 |
+| Phase 2 — Execution Layer | Polars 연동, CLI 도구, 차트 출력 | 완료 |
+| Phase 3 — IDE Integration | Visual IDE, 그래픽 파이프라인 편집기 | 완료 |
+| Phase 4 — Expanded Language | 연산자 확장, join 개선, 스키마 진화 | 진행 중 |
+| Phase 5 — AI Expansion | 자연어 쿼리 인터페이스 (NQP), AI 기반 분석 | Experimental |
+
+---
+
+## 기여
+
+버그 제보, 아이디어, 논의는 GitHub Issues로 언제든 환영한다.
+
+**코드 기여(Pull Request) 관련:**  
+2026년 제8회 한국코드페어 평가 기간 동안 저작자 동일성 보장을 위해 코드 기여(PR)는 2026년 10월까지 임시 중단 상태다. 대회 종료 후 재개된다.
+
+- 이슈(버그 제보, 아이디어, 논의): 항상 열려 있음
+- Pull Request: 2026년 10월까지 중단
+
+로컬 빌드 방법과 기여 가이드는 [CONTRIBUTING.md](CONTRIBUTING.md) 참고.
+
+---
+
+## 라이선스
+
+Apache-2.0 — 자세한 내용은 [LICENSE](LICENSE) 참고.
 
 ---
 
